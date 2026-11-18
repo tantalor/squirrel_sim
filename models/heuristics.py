@@ -63,12 +63,16 @@ class SectorPatrolSquirrel:
 
     def __init__(self, sweep_width: int = 4):
         self.sweep_width = sweep_width
-        # Signs for the 4 quadrants: (East/North, East/South, West/South, West/North)
-        self.quadrant_signs = [
-            (1, 1),
-            (1, -1),
-            (-1, -1),
-            (-1, 1),
+        # 4 strictly disjoint 90°-rotated quadrants partitioning Z^2 \ {(0,0)}:
+        # Each quadrant owns (p >= 1, q >= 0) where p is its primary outward axis
+        # and q is its secondary axis, so each axis (+x, +y, -x, -y) is owned by
+        # exactly one quadrant with zero double-walking.
+        # Format: (p_dir_vec, q_dir_vec, action_+p, action_-p, action_+q)
+        self.quadrants = [
+            ((1, 0),  (0, 1),  SquirrelEnv.ACTION_EAST,  SquirrelEnv.ACTION_WEST,  SquirrelEnv.ACTION_NORTH),  # Q0: x>0, y>=0
+            ((0, 1),  (-1, 0), SquirrelEnv.ACTION_NORTH, SquirrelEnv.ACTION_SOUTH, SquirrelEnv.ACTION_WEST),   # Q1: x<=0, y>0
+            ((-1, 0), (0, -1), SquirrelEnv.ACTION_WEST,  SquirrelEnv.ACTION_EAST,  SquirrelEnv.ACTION_SOUTH),  # Q2: x<0, y<=0
+            ((0, -1), (1, 0),  SquirrelEnv.ACTION_SOUTH, SquirrelEnv.ACTION_NORTH, SquirrelEnv.ACTION_EAST),   # Q3: x>=0, y<0
         ]
 
     def select_action(self, obs: List[float], x: int, y: int, margin: int, day: int) -> int:
@@ -87,24 +91,22 @@ class SectorPatrolSquirrel:
                 return SquirrelEnv.ACTION_STAY
             return get_homing_action(x, y)
 
-        # Determine active quadrant for today
-        quadrant = day % 4
-        sx, sy = self.quadrant_signs[quadrant]
+        # Active 90°-rotated disjoint quadrant for today
+        (px, py), (qx, qy), act_pos_p, act_neg_p, act_pos_q = self.quadrants[day % 4]
 
-        # Convert to local quadrant coordinates (u >= 0, v >= 0)
-        u = x * sx
-        v = y * sy
+        # Local quadrant coordinates (p >= 1, q >= 0 inside quadrant; (0,0) at home)
+        p = x * px + y * py
+        q = x * qx + y * qy
 
-        # Boustrophedon 2D raster sweep starting on row v = 0 (y = 0):
-        # - On even rows (v = 0, 2, 4...): sweep outward along +u until u == sweep_width, then step +v
-        # - On odd rows  (v = 1, 3, 5...): sweep inward along -u until u == 0, then step +v
-        if v % 2 == 0:
-            if u < self.sweep_width:
-                return SquirrelEnv.ACTION_EAST if sx > 0 else SquirrelEnv.ACTION_WEST
-            else:
-                return SquirrelEnv.ACTION_NORTH if sy > 0 else SquirrelEnv.ACTION_SOUTH
+        # Boustrophedon 2D raster sweep over p in [1..sweep_width], q = 0, 1, 2...
+        # - At (0, 0): p=0, q=0 -> steps +p onto (1, 0) (the quadrant's owned axis)
+        # - Even rows (q = 0, 2...): sweep outward along +p until sweep_width, then step +q
+        # - Odd rows  (q = 1, 3...): sweep inward along -p until p == 1, then step +q
+        if q % 2 == 0:
+            if p < self.sweep_width:
+                return act_pos_p
+            return act_pos_q
         else:
-            if u > 0:
-                return SquirrelEnv.ACTION_WEST if sx > 0 else SquirrelEnv.ACTION_EAST
-            else:
-                return SquirrelEnv.ACTION_NORTH if sy > 0 else SquirrelEnv.ACTION_SOUTH
+            if p > 1:
+                return act_neg_p
+            return act_pos_q
