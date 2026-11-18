@@ -1,0 +1,702 @@
+[
+  {
+    "gen": 1,
+    "best_fitness": 83.9,
+    "best_survived_days": 13,
+    "best_buried": 93,
+    "best_retrieved": 41
+  },
+  {
+    "gen": 2,
+    "best_fitness": 79.2,
+    "best_survived_days": 11,
+    "best_buried": 83,
+    "best_retrieved": 36
+  },
+  {
+    "gen": 3,
+    "best_fitness": 64.12,
+    "best_survived_days": 11,
+    "best_buried": 87,
+    "best_retrieved": 35
+  },
+  {
+    "gen": 4,
+    "best_fitness": 82.75,
+    "best_survived_days": 14,
+    "best_buried": 73,
+    "best_retrieved": 42
+  },
+  {
+    "gen": 5,
+    "best_fitness": 85.42,
+    "best_survived_days": 14,
+    "best_buried": 83,
+    "best_retrieved": 43
+  },
+  {
+    "gen": 6,
+    "best_fitness": 87.53,
+    "best_survived_days": 13,
+    "best_buried": 91,
+    "best_retrieved": 40
+  },
+  {
+    "gen": 7,
+    "best_fitness": 85.08,
+    "best_survived_days": 14,
+    "best_buried": 82,
+    "best_retrieved": 43
+  },
+  {
+    "gen": 8,
+    "best_fitness": 83.65,
+    "best_survived_days": 12,
+    "best_buried": 91,
+    "best_retrieved": 37
+  },
+  {
+    "gen": 9,
+    "best_fitness": 105.18,
+    "best_survived_days": 16,
+    "best_buried": 82,
+    "best_retrieved": 51
+  },
+  {
+    "gen": 10,
+    "best_fitness": 102.52,
+    "best_survived_days": 17,
+    "best_buried": 83,
+    "best_retrieved": 52
+  },
+  {
+    "gen": 11,
+    "best_fitness": 105.17,
+    "best_survived_days": 17,
+    "best_buried": 78,
+    "best_retrieved": 52
+  },
+  {
+    "gen": 12,
+    "best_fitness": 90.42,
+    "best_survived_days": 14,
+    "best_buried": 86,
+    "best_retrieved": 44
+  },
+  {
+    "gen": 13,
+    "best_fitness": 98.25,
+    "best_survived_days": 16,
+    "best_buried": 85,
+    "best_retrieved": 49
+  },
+  {
+    "gen": 14,
+    "best_fitness": 96.0,
+    "best_survived_days": 16,
+    "best_buried": 85,
+    "best_retrieved": 49
+  },
+  {
+    "gen": 15,
+    "best_fitness": 107.72,
+    "best_survived_days": 18,
+    "best_buried": 88,
+    "best_retrieved": 56
+  },
+  {
+    "gen": 16,
+    "best_fitness": 109.95,
+    "best_survived_days": 18,
+    "best_buried": 88,
+    "best_retrieved": 56
+  },
+  {
+    "gen": 17,
+    "best_fitness": 115.15,
+    "best_survived_days": 18,
+    "best_buried": 89,
+    "best_retrieved": 56
+  },
+  {
+    "gen": 18,
+    "best_fitness": 97.62,
+    "best_survived_days": 14,
+    "best_buried": 87,
+    "best_retrieved": 45
+  },
+  {
+    "gen": 19,
+    "best_fitness": 112.02,
+    "best_survived_days": 18,
+    "best_buried": 93,
+    "best_retrieved": 55
+  },
+  {
+    "gen": 20,
+    "best_fitness": 109.75,
+    "best_survived_days": 18,
+    "best_buried": 97,
+    "best_retrieved": 54
+  },
+  {
+    "gen": 21,
+    "best_fitness": 105.73,
+    "best_survived_days": 18,
+    "best_buried": 88,
+    "best_retrieved": 56
+  },
+  {
+    "gen": 22,
+    "best_fitness": 115.53,
+    "best_survived_days": 19,
+    "best_buried": 96,
+    "best_retrieved": 57
+  },
+  {
+    "gen": 23,
+    "best_fitness": 110.35,
+    "best_survived_days": 18,
+    "best_buried": 83,
+    "best_retrieved": 55
+  },
+  {
+    "gen": 24,
+    "best_fitness": 108.25,
+    "best_survived_days": 17,
+    "best_buried": 85,
+    "best_retrieved": 52
+  },
+  {
+    "gen": 25,
+    "best_fitness": 110.78,
+    "best_survived_days": 19,
+    "best_buried": 95,
+    "best_retrieved": 58
+  },
+  {
+    "gen": 26,
+    "best_fitness": 122.95,
+    "best_survived_days": 18,
+    "best_buried": 100,
+    "best_retrieved": 57
+  },
+  {
+    "gen": 27,
+    "best_fitness": 108.08,
+    "best_survived_days": 18,
+    "best_buried": 78,
+    "best_retrieved": 56
+  },
+  {
+    "gen": 28,
+    "best_fitness": 116.18,
+    "best_survived_days": 20,
+    "best_buried": 90,
+    "best_retrieved": 62
+  },
+  {
+    "gen": 29,
+    "best_fitness": 122.7,
+    "best_survived_days": 20,
+    "best_buried": 93,
+    "best_retrieved": 60
+  },
+  {
+    "gen": 30,
+    "best_fitness": 113.72,
+    "best_survived_days": 19,
+    "best_buried": 90,
+    "best_retrieved": 58
+  },
+  {
+    "gen": 31,
+    "best_fitness": 118.18,
+    "best_survived_days": 19,
+    "best_buried": 81,
+    "best_retrieved": 59
+  },
+  {
+    "gen": 32,
+    "best_fitness": 113.2,
+    "best_survived_days": 18,
+    "best_buried": 91,
+    "best_retrieved": 55
+  },
+  {
+    "gen": 33,
+    "best_fitness": 119.4,
+    "best_survived_days": 20,
+    "best_buried": 89,
+    "best_retrieved": 61
+  },
+  {
+    "gen": 34,
+    "best_fitness": 130.4,
+    "best_survived_days": 22,
+    "best_buried": 95,
+    "best_retrieved": 66
+  },
+  {
+    "gen": 35,
+    "best_fitness": 115.43,
+    "best_survived_days": 20,
+    "best_buried": 85,
+    "best_retrieved": 62
+  },
+  {
+    "gen": 36,
+    "best_fitness": 118.12,
+    "best_survived_days": 20,
+    "best_buried": 84,
+    "best_retrieved": 62
+  },
+  {
+    "gen": 37,
+    "best_fitness": 121.18,
+    "best_survived_days": 20,
+    "best_buried": 84,
+    "best_retrieved": 62
+  },
+  {
+    "gen": 38,
+    "best_fitness": 116.7,
+    "best_survived_days": 19,
+    "best_buried": 85,
+    "best_retrieved": 59
+  },
+  {
+    "gen": 39,
+    "best_fitness": 119.15,
+    "best_survived_days": 20,
+    "best_buried": 86,
+    "best_retrieved": 61
+  },
+  {
+    "gen": 40,
+    "best_fitness": 126.6,
+    "best_survived_days": 21,
+    "best_buried": 92,
+    "best_retrieved": 65
+  },
+  {
+    "gen": 41,
+    "best_fitness": 136.45,
+    "best_survived_days": 22,
+    "best_buried": 97,
+    "best_retrieved": 67
+  },
+  {
+    "gen": 42,
+    "best_fitness": 136.35,
+    "best_survived_days": 22,
+    "best_buried": 95,
+    "best_retrieved": 67
+  },
+  {
+    "gen": 43,
+    "best_fitness": 117.7,
+    "best_survived_days": 19,
+    "best_buried": 78,
+    "best_retrieved": 60
+  },
+  {
+    "gen": 44,
+    "best_fitness": 132.1,
+    "best_survived_days": 20,
+    "best_buried": 94,
+    "best_retrieved": 63
+  },
+  {
+    "gen": 45,
+    "best_fitness": 133.23,
+    "best_survived_days": 21,
+    "best_buried": 98,
+    "best_retrieved": 66
+  },
+  {
+    "gen": 46,
+    "best_fitness": 136.28,
+    "best_survived_days": 22,
+    "best_buried": 95,
+    "best_retrieved": 67
+  },
+  {
+    "gen": 47,
+    "best_fitness": 130.73,
+    "best_survived_days": 22,
+    "best_buried": 91,
+    "best_retrieved": 66
+  },
+  {
+    "gen": 48,
+    "best_fitness": 135.1,
+    "best_survived_days": 22,
+    "best_buried": 94,
+    "best_retrieved": 67
+  },
+  {
+    "gen": 49,
+    "best_fitness": 132.45,
+    "best_survived_days": 23,
+    "best_buried": 78,
+    "best_retrieved": 72
+  },
+  {
+    "gen": 50,
+    "best_fitness": 144.2,
+    "best_survived_days": 25,
+    "best_buried": 86,
+    "best_retrieved": 77
+  },
+  {
+    "gen": 51,
+    "best_fitness": 139.35,
+    "best_survived_days": 22,
+    "best_buried": 91,
+    "best_retrieved": 67
+  },
+  {
+    "gen": 52,
+    "best_fitness": 136.02,
+    "best_survived_days": 22,
+    "best_buried": 91,
+    "best_retrieved": 68
+  },
+  {
+    "gen": 53,
+    "best_fitness": 136.7,
+    "best_survived_days": 22,
+    "best_buried": 103,
+    "best_retrieved": 67
+  },
+  {
+    "gen": 54,
+    "best_fitness": 130.75,
+    "best_survived_days": 22,
+    "best_buried": 95,
+    "best_retrieved": 68
+  },
+  {
+    "gen": 55,
+    "best_fitness": 132.77,
+    "best_survived_days": 22,
+    "best_buried": 96,
+    "best_retrieved": 68
+  },
+  {
+    "gen": 56,
+    "best_fitness": 130.22,
+    "best_survived_days": 20,
+    "best_buried": 88,
+    "best_retrieved": 61
+  },
+  {
+    "gen": 57,
+    "best_fitness": 138.77,
+    "best_survived_days": 22,
+    "best_buried": 92,
+    "best_retrieved": 67
+  },
+  {
+    "gen": 58,
+    "best_fitness": 139.32,
+    "best_survived_days": 22,
+    "best_buried": 93,
+    "best_retrieved": 66
+  },
+  {
+    "gen": 59,
+    "best_fitness": 129.85,
+    "best_survived_days": 23,
+    "best_buried": 81,
+    "best_retrieved": 72
+  },
+  {
+    "gen": 60,
+    "best_fitness": 130.82,
+    "best_survived_days": 20,
+    "best_buried": 87,
+    "best_retrieved": 61
+  },
+  {
+    "gen": 61,
+    "best_fitness": 139.45,
+    "best_survived_days": 22,
+    "best_buried": 91,
+    "best_retrieved": 66
+  },
+  {
+    "gen": 62,
+    "best_fitness": 133.53,
+    "best_survived_days": 21,
+    "best_buried": 97,
+    "best_retrieved": 64
+  },
+  {
+    "gen": 63,
+    "best_fitness": 140.55,
+    "best_survived_days": 24,
+    "best_buried": 90,
+    "best_retrieved": 75
+  },
+  {
+    "gen": 64,
+    "best_fitness": 124.83,
+    "best_survived_days": 19,
+    "best_buried": 89,
+    "best_retrieved": 60
+  },
+  {
+    "gen": 65,
+    "best_fitness": 131.32,
+    "best_survived_days": 21,
+    "best_buried": 98,
+    "best_retrieved": 65
+  },
+  {
+    "gen": 66,
+    "best_fitness": 126.88,
+    "best_survived_days": 22,
+    "best_buried": 89,
+    "best_retrieved": 67
+  },
+  {
+    "gen": 67,
+    "best_fitness": 123.93,
+    "best_survived_days": 20,
+    "best_buried": 91,
+    "best_retrieved": 62
+  },
+  {
+    "gen": 68,
+    "best_fitness": 131.07,
+    "best_survived_days": 21,
+    "best_buried": 97,
+    "best_retrieved": 65
+  },
+  {
+    "gen": 69,
+    "best_fitness": 133.62,
+    "best_survived_days": 22,
+    "best_buried": 92,
+    "best_retrieved": 67
+  },
+  {
+    "gen": 70,
+    "best_fitness": 130.57,
+    "best_survived_days": 22,
+    "best_buried": 92,
+    "best_retrieved": 67
+  },
+  {
+    "gen": 71,
+    "best_fitness": 134.12,
+    "best_survived_days": 22,
+    "best_buried": 94,
+    "best_retrieved": 67
+  },
+  {
+    "gen": 72,
+    "best_fitness": 135.0,
+    "best_survived_days": 22,
+    "best_buried": 88,
+    "best_retrieved": 66
+  },
+  {
+    "gen": 73,
+    "best_fitness": 142.72,
+    "best_survived_days": 23,
+    "best_buried": 98,
+    "best_retrieved": 72
+  },
+  {
+    "gen": 74,
+    "best_fitness": 132.25,
+    "best_survived_days": 20,
+    "best_buried": 93,
+    "best_retrieved": 62
+  },
+  {
+    "gen": 75,
+    "best_fitness": 155.1,
+    "best_survived_days": 25,
+    "best_buried": 95,
+    "best_retrieved": 77
+  },
+  {
+    "gen": 76,
+    "best_fitness": 141.82,
+    "best_survived_days": 25,
+    "best_buried": 87,
+    "best_retrieved": 75
+  },
+  {
+    "gen": 77,
+    "best_fitness": 147.9,
+    "best_survived_days": 24,
+    "best_buried": 98,
+    "best_retrieved": 74
+  },
+  {
+    "gen": 78,
+    "best_fitness": 142.18,
+    "best_survived_days": 22,
+    "best_buried": 94,
+    "best_retrieved": 68
+  },
+  {
+    "gen": 79,
+    "best_fitness": 129.88,
+    "best_survived_days": 23,
+    "best_buried": 92,
+    "best_retrieved": 69
+  },
+  {
+    "gen": 80,
+    "best_fitness": 133.77,
+    "best_survived_days": 22,
+    "best_buried": 95,
+    "best_retrieved": 68
+  },
+  {
+    "gen": 81,
+    "best_fitness": 130.35,
+    "best_survived_days": 22,
+    "best_buried": 87,
+    "best_retrieved": 67
+  },
+  {
+    "gen": 82,
+    "best_fitness": 131.12,
+    "best_survived_days": 22,
+    "best_buried": 90,
+    "best_retrieved": 67
+  },
+  {
+    "gen": 83,
+    "best_fitness": 128.32,
+    "best_survived_days": 21,
+    "best_buried": 95,
+    "best_retrieved": 64
+  },
+  {
+    "gen": 84,
+    "best_fitness": 136.85,
+    "best_survived_days": 23,
+    "best_buried": 96,
+    "best_retrieved": 69
+  },
+  {
+    "gen": 85,
+    "best_fitness": 142.2,
+    "best_survived_days": 23,
+    "best_buried": 83,
+    "best_retrieved": 71
+  },
+  {
+    "gen": 86,
+    "best_fitness": 149.73,
+    "best_survived_days": 25,
+    "best_buried": 100,
+    "best_retrieved": 75
+  },
+  {
+    "gen": 87,
+    "best_fitness": 138.6,
+    "best_survived_days": 22,
+    "best_buried": 98,
+    "best_retrieved": 68
+  },
+  {
+    "gen": 88,
+    "best_fitness": 134.5,
+    "best_survived_days": 22,
+    "best_buried": 92,
+    "best_retrieved": 67
+  },
+  {
+    "gen": 89,
+    "best_fitness": 146.58,
+    "best_survived_days": 25,
+    "best_buried": 93,
+    "best_retrieved": 75
+  },
+  {
+    "gen": 90,
+    "best_fitness": 140.78,
+    "best_survived_days": 23,
+    "best_buried": 92,
+    "best_retrieved": 70
+  },
+  {
+    "gen": 91,
+    "best_fitness": 140.07,
+    "best_survived_days": 22,
+    "best_buried": 96,
+    "best_retrieved": 66
+  },
+  {
+    "gen": 92,
+    "best_fitness": 136.07,
+    "best_survived_days": 24,
+    "best_buried": 87,
+    "best_retrieved": 73
+  },
+  {
+    "gen": 93,
+    "best_fitness": 142.97,
+    "best_survived_days": 24,
+    "best_buried": 92,
+    "best_retrieved": 72
+  },
+  {
+    "gen": 94,
+    "best_fitness": 139.38,
+    "best_survived_days": 24,
+    "best_buried": 88,
+    "best_retrieved": 72
+  },
+  {
+    "gen": 95,
+    "best_fitness": 132.43,
+    "best_survived_days": 23,
+    "best_buried": 90,
+    "best_retrieved": 70
+  },
+  {
+    "gen": 96,
+    "best_fitness": 132.27,
+    "best_survived_days": 21,
+    "best_buried": 86,
+    "best_retrieved": 66
+  },
+  {
+    "gen": 97,
+    "best_fitness": 143.25,
+    "best_survived_days": 25,
+    "best_buried": 95,
+    "best_retrieved": 76
+  },
+  {
+    "gen": 98,
+    "best_fitness": 129.12,
+    "best_survived_days": 20,
+    "best_buried": 85,
+    "best_retrieved": 63
+  },
+  {
+    "gen": 99,
+    "best_fitness": 128.0,
+    "best_survived_days": 20,
+    "best_buried": 90,
+    "best_retrieved": 63
+  },
+  {
+    "gen": 100,
+    "best_fitness": 130.02,
+    "best_survived_days": 21,
+    "best_buried": 85,
+    "best_retrieved": 64
+  }
+]

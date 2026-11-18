@@ -65,13 +65,22 @@ class GeneticTrainer:
             step_count = 0
             max_total_steps = (self.sim_config.summer_days + self.sim_config.winter_days) * (self.sim_config.move_budget + 2)
             visited_summer_cells = set()
+            steps_carrying_summer = 0
+            dropped_unburied_summer = 0
 
             while not env.done and step_count < max_total_steps:
                 was_summer = (env.season == "summer")
+                carrying_before = env.carrying_nut
                 action = policy.predict(obs, deterministic=True)
                 obs, _, done, info = env.step(action)
-                if was_summer and (env.x, env.y) != (0, 0):
-                    visited_summer_cells.add((env.x, env.y))
+                if was_summer:
+                    if (env.x, env.y) != (0, 0):
+                        visited_summer_cells.add((env.x, env.y))
+                    if env.carrying_nut:
+                        steps_carrying_summer += 1
+                    elif carrying_before and (env.x, env.y) == (0, 0):
+                        # Returned home at sunset still holding an unburied nut
+                        dropped_unburied_summer += 1
                 step_count += 1
 
             survived = env.winter_days_survived
@@ -84,13 +93,18 @@ class GeneticTrainer:
             # - Intermediate progress: Winter nuts eaten * 1.0
             # - Summer caching bonus: 0.25 per nut buried, capped at 1.25x winter demand
             # - Territory exploration bonus: 0.15 per unique cell visited in summer,
-            #   capped at 1.5x target_caches to encourage multi-quadrant foraging
+            #   capped at 2.0x target_caches (~3-4 quadrants)
+            # - Lost-bury-opportunity penalties:
+            #     * -1.5 per nut carried back to burrow unburied at sunset
+            #     * -0.05 per summer step spent carrying a nut over occupied cells
             # - Penalty: Exposure outside home burrow
             target_caches = int(self.sim_config.winter_days * self.sim_config.daily_winter_quota * 1.25)
-            target_cells = int(target_caches * 1.5)
+            target_cells = int(target_caches * 2.0)
             fit = (float(survived) * 2.0) + (float(retrieved) * 1.0)
             fit += 0.25 * min(buried, target_caches)
             fit += 0.15 * min(len(visited_summer_cells), target_cells)
+            fit -= 1.5 * dropped_unburied_summer
+            fit -= 0.05 * steps_carrying_summer
             if is_stranded:
                 fit -= 0.5
 
