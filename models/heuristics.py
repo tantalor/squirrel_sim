@@ -28,7 +28,7 @@ class RandomSquirrel:
 
     def select_action(self, obs: List[float], x: int, y: int, margin: int) -> int:
         # If already at home in winter and ate, stay
-        quota_met = (obs[8] > 0.5)
+        quota_met = (obs[8] >= 1.0 - 1e-6)
         is_winter = (obs[7] > 0.5)
 
         if is_winter and quota_met:
@@ -73,7 +73,7 @@ class SectorPatrolSquirrel:
 
     def select_action(self, obs: List[float], x: int, y: int, margin: int, day: int) -> int:
         is_winter = (obs[7] > 0.5)
-        quota_met = (obs[8] > 0.5)
+        quota_met = (obs[8] >= 1.0 - 1e-6)
 
         # Winter rule: If quota met, immediately return home and stay
         if is_winter and quota_met:
@@ -95,20 +95,16 @@ class SectorPatrolSquirrel:
         u = x * sx
         v = y * sy
 
-        # If at home (0, 0), enter quadrant along vertical axis
-        if (x, y) == (0, 0):
-            return SquirrelEnv.ACTION_NORTH if sy > 0 else SquirrelEnv.ACTION_SOUTH
-
-        # Boustrophedon 2D raster sweep across rows v = 1, 2, 3...
-        # - On odd rows: sweep outward along u until reaching sweep_width, then step +v
-        # - On even rows: sweep inward along u until reaching 1, then step +v
-        if v % 2 == 1:
+        # Boustrophedon 2D raster sweep starting on row v = 0 (y = 0):
+        # - On even rows (v = 0, 2, 4...): sweep outward along +u until u == sweep_width, then step +v
+        # - On odd rows  (v = 1, 3, 5...): sweep inward along -u until u == 0, then step +v
+        if v % 2 == 0:
             if u < self.sweep_width:
                 return SquirrelEnv.ACTION_EAST if sx > 0 else SquirrelEnv.ACTION_WEST
             else:
                 return SquirrelEnv.ACTION_NORTH if sy > 0 else SquirrelEnv.ACTION_SOUTH
         else:
-            if u > 1:
+            if u > 0:
                 return SquirrelEnv.ACTION_WEST if sx > 0 else SquirrelEnv.ACTION_EAST
             else:
                 return SquirrelEnv.ACTION_NORTH if sy > 0 else SquirrelEnv.ACTION_SOUTH
