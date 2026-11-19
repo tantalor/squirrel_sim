@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🐿️ Squirrel Simulator — Interactive Replays</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --fg: #f1f5f9;
+      --card: #1e293b;
+      --border: #334155;
+      --muted: #94a3b8;
+    }
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #f8fafc;
+        --fg: #0f172a;
+        --card: #ffffff;
+        --border: #e2e8f0;
+        --muted: #64748b;
+      }
+    }
+    body { background: var(--bg); color: var(--fg); }
+    .card { background: var(--card); border: 1px solid var(--border); }
+  </style>
+</head>
+<body class="antialiased min-h-screen p-6">
+  <div class="max-w-3xl mx-auto space-y-6">
+    <header class="border-b border-[var(--border)] pb-4 flex flex-wrap items-center justify-between gap-2">
+      <div>
+        <h1 class="text-2xl font-bold flex items-center gap-2">🐿️ Squirrel Simulator</h1>
+        <p class="text-sm text-[var(--muted)] mt-1">
+          Interactive step-by-step replays of strictly blind, stateless neuroevolved squirrels vs. heuristic baselines.
+        </p>
+      </div>
+      <a href="https://github.com/tantalor/squirrel_sim" class="text-xs font-mono px-3 py-1.5 rounded-lg border border-[var(--border)] hover:border-blue-500 transition">
+        GitHub Repo ↗
+      </a>
+    </header>
+
+    <section class="space-y-3">
+      <h2 class="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">Neural Policies (Neuroevolution)</h2>
+
+      <a href="./nightmare_30_of_30.html" class="card block rounded-xl p-4 hover:border-emerald-500 transition">
+        <div class="flex items-center justify-between gap-2">
+          <span class="font-bold">🏆 Nightmare Mode — Lean MLP (12, 12, 12, 5)</span>
+          <span class="text-xs font-mono px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">30 / 30 Survived</span>
+        </div>
+        <p class="text-xs text-[var(--muted)] mt-1">
+          M=22 moves, K=3 nuts/day (90 winter nuts), seed=999 • Only 377 weights • First full 30/30 survival on Nightmare tier.
+        </p>
+      </a>
+
+      <a href="./nightmare_4quad.html" class="card block rounded-xl p-4 hover:border-blue-500 transition">
+        <div class="flex items-center justify-between gap-2">
+          <span class="font-bold">🧭 Nightmare Mode — 4-Quadrant MLP (12, 16, 5)</span>
+          <span class="text-xs font-mono px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400 border border-blue-500/30">26 / 30 • All 4 Quads</span>
+        </div>
+        <p class="text-xs text-[var(--muted)] mt-1">
+          M=22 moves, K=3 nuts/day, seed=999 • Single hidden layer (293 weights) • Buries ~101 nuts across ~190 cells in all 4 quadrants.
+        </p>
+      </a>
+
+      <a href="./hard_mlp.html" class="card block rounded-xl p-4 hover:border-emerald-500 transition">
+        <div class="flex items-center justify-between gap-2">
+          <span class="font-bold">🌰 Hard Mode — Neural MLP (12, 20, 20, 5)</span>
+          <span class="text-xs font-mono px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">30 / 30 Survived</span>
+        </div>
+        <p class="text-xs text-[var(--muted)] mt-1">
+          M=22 moves, K=2 nuts/day (60 winter nuts), seed=2024 • Emergent 2-quadrant sweep (83 buried, 60 retrieved).
+        </p>
+      </a>
+    </section>
+
+    <section class="space-y-3">
+      <h2 class="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">Heuristic Baselines (Hard Mode: M=22, K=2)</h2>
+
+      <a href="./sector_patrol.html" class="card block rounded-xl p-4 hover:border-amber-500 transition">
+        <div class="flex items-center justify-between gap-2">
+          <span class="font-bold">📐 Sector Patrol (Disjoint 4-Quadrant Boustrophedon Sweep)</span>
+          <span class="text-xs font-mono px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">30 / 30 Survived</span>
+        </div>
+        <p class="text-xs text-[var(--muted)] mt-1">
+          Hand-engineered 90°-rotated lawnmower sweep across 4 strictly disjoint quadrants (seed=2024).
+        </p>
+      </a>
+
+      <a href="./random_walk.html" class="card block rounded-xl p-4 hover:border-rose-500 transition">
+        <div class="flex items-center justify-between gap-2">
+          <span class="font-bold">🎲 Random Walk Baseline</span>
+          <span class="text-xs font-mono px-2 py-0.5 rounded-full bg-rose-500/15 text-rose-400 border border-rose-500/30">11 / 30 Starved</span>
+        </div>
+        <p class="text-xs text-[var(--muted)] mt-1">
+          Random cardinal movement with homing reflex (seed=2024).
+        </p>
+      </a>
+    </section>
+
+    <footer class="text-xs text-[var(--muted)] pt-2 border-t border-[var(--border)]">
+      Controls inside every viewer: <kbd class="px-1.5 py-0.5 rounded border border-[var(--border)] font-mono">Space</kbd> Play/Pause,
+      <kbd class="px-1.5 py-0.5 rounded border border-[var(--border)] font-mono">←</kbd> / <kbd class="px-1.5 py-0.5 rounded border border-[var(--border)] font-mono">→</kbd> Step,
+      or click anywhere on the Nuts-in-Ground graph to jump to a day.
+    </footer>
+  </div>
+</body>
+</html>

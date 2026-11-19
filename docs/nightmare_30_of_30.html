@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  :root {
+    --background: #0f172a;
+    --foreground: #f1f5f9;
+    --card: #1e293b;
+    --card-border: #334155;
+    --border: #334155;
+    --muted-foreground: #94a3b8;
+    --primary: #3b82f6;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --background: #f8fafc;
+      --foreground: #0f172a;
+      --card: #ffffff;
+      --card-border: #e2e8f0;
+      --border: #cbd5e1;
+      --muted-foreground: #64748b;
+      --primary: #2563eb;
+    }
+  }
+  body { background: var(--background) !important; color: var(--foreground); }
+  canvas { image-rendering: pixelated; }
+  .btn { cursor:pointer; user-select:none; transition: all 0.12s; }
+  .btn:active { transform: scale(0.95); }
+  input[type=range] { accent-color: var(--primary,#3b82f6); cursor:pointer; }
+  .event-entry { animation: fadeIn 0.2s ease; }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(-4px)} to{opacity:1;transform:none} }
+  .action-bar { transition: width 0.2s ease; }
+  #step-log { scrollbar-width: thin; }
+</style>
+</head>
+<body class="bg-transparent text-[var(--foreground)] p-0 m-0 antialiased">
+<div class="flex flex-col gap-3 p-3 max-w-5xl mx-auto select-none" id="app">
+
+  <!-- HEADER -->
+  <div class="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--card-border)] pb-2">
+    <div>
+      <h2 class="text-base font-bold flex items-center gap-2">🐿️ Squirrel Replay — Lean (12,12,12,5) • M=22, K=3 • 30/30!</h2>
+      <p id="sim-subtitle" class="text-xs text-[var(--muted-foreground)]">Squirrel trajectory replay</p>
+    </div>
+    <div class="flex items-center gap-2"><a href="./index.html" class="text-xs px-2.5 py-1 rounded-full border border-[var(--border)] hover:border-[var(--primary)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition">← All Replays</a><div id="season-badge" class="text-xs font-bold px-3 py-1 rounded-full border">Summer</div></div>
+  </div>
+
+  <!-- CONFIG TABLE -->
+  <div class="rounded-xl bg-[var(--card)] border border-[var(--card-border)] overflow-x-auto">
+    <table class="w-full text-xs font-mono text-left border-collapse">
+      <thead>
+        <tr class="border-b border-[var(--card-border)] text-[11px] text-[var(--muted-foreground)] uppercase tracking-wider">
+          <th class="px-3 py-1.5 font-semibold">Summer / Winter Days</th>
+          <th class="px-3 py-1.5 font-semibold">Moves / Day</th>
+          <th class="px-3 py-1.5 font-semibold">Nut Quota</th>
+          <th class="px-3 py-1.5 font-semibold">Nut Chance</th>
+          <th class="px-3 py-1.5 font-semibold">Seed</th>
+          <th class="px-3 py-1.5 font-semibold">Outcome</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td id="cfg-days" class="px-3 py-1.5 font-semibold">—</td>
+          <td id="cfg-moves" class="px-3 py-1.5 font-semibold">—</td>
+          <td id="cfg-quota" class="px-3 py-1.5 font-semibold">—</td>
+          <td id="cfg-pfind" class="px-3 py-1.5 font-semibold">—</td>
+          <td id="cfg-seed" class="px-3 py-1.5 font-semibold">—</td>
+          <td id="cfg-status" class="px-3 py-1.5 font-semibold">—</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- MAIN: CANVAS + RIGHT PANEL -->
+  <div class="flex gap-3 flex-wrap lg:flex-nowrap">
+
+    <!-- LEFT: GRID + CONTROLS -->
+    <div class="flex flex-col gap-2 flex-1 min-w-0">
+
+      <!-- Grid canvas -->
+      <div class="rounded-xl overflow-hidden border border-[var(--card-border)] bg-[var(--card)] flex items-center justify-center p-2">
+        <canvas id="grid" width="460" height="380"></canvas>
+      </div>
+
+      <!-- LEGEND -->
+      <div class="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-[var(--muted-foreground)] px-1">
+        <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded-full" style="background:#facc15"></span> Squirrel</span>
+        <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded-sm" style="background:#ef4444"></span> Burrow (0,0)</span>
+        <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded-sm" style="background:#a78bfa"></span> Buried nut</span>
+        <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded-sm" style="background:linear-gradient(135deg,#fbbf24 50%,#60a5fa 50%)"></span> Trail (Summer / Winter)</span>
+        <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded-sm" style="background:#fb923c"></span> Retrieved today</span>
+        <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded-sm" style="background:#34d399"></span> Buried today</span>
+      </div>
+
+      <!-- Day scrubber -->
+      <div class="rounded-xl bg-[var(--card)] border border-[var(--card-border)] p-3 flex flex-col gap-2">
+        <div class="flex items-center justify-between text-xs font-semibold">
+          <span>Day</span>
+          <span id="day-label" class="font-mono text-[var(--primary,#3b82f6)]">Summer Day 1 of 30</span>
+        </div>
+        <input id="day-slider" type="range" min="0" max="59" value="0" class="w-full h-2">
+        <div class="flex gap-1 h-4" id="day-minimap"></div>
+      </div>
+
+      <!-- Step scrubber + playback -->
+      <div class="rounded-xl bg-[var(--card)] border border-[var(--card-border)] p-3 flex flex-col gap-2">
+        <div class="flex items-center justify-between text-xs font-semibold">
+          <span>Step within day</span>
+          <span id="step-label" class="font-mono text-[var(--primary,#3b82f6)]">1 / 22</span>
+        </div>
+        <input id="step-slider" type="range" min="0" max="21" value="0" class="w-full h-2">
+
+        <div class="flex items-center gap-2 mt-1 justify-between">
+          <div class="flex gap-1">
+            <button class="btn px-2.5 py-1 rounded-md text-xs bg-[var(--background)] border border-[var(--border)] hover:border-[var(--primary,#3b82f6)]" onclick="prevStep()">◀ Prev</button>
+            <button class="btn px-2.5 py-1 rounded-md text-xs bg-[var(--background)] border border-[var(--border)] hover:border-[var(--primary,#3b82f6)]" id="play-btn" onclick="togglePlay()">▶ Play</button>
+            <button class="btn px-2.5 py-1 rounded-md text-xs bg-[var(--background)] border border-[var(--border)] hover:border-[var(--primary,#3b82f6)]" onclick="nextStep()">Next ▶</button>
+          </div>
+          <div class="flex items-center gap-2 text-xs text-[var(--muted-foreground)]">
+            <span>Speed</span>
+            <input id="speed-slider" type="range" min="1" max="10" value="4" class="w-20 h-2">
+            <span id="speed-label" class="font-mono w-10">4×</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: GRAPH + STATS + EVENT LOG -->
+    <div class="flex flex-col gap-2 w-full lg:w-72 shrink-0">
+
+      <!-- Nuts in ground line graph -->
+      <div class="rounded-xl bg-[var(--card)] border border-[var(--card-border)] p-3 flex flex-col gap-1.5">
+        <div class="flex items-center justify-between text-xs gap-1">
+          <span class="font-semibold text-[var(--muted-foreground)] uppercase tracking-wider text-[11px]">Nuts in Ground</span>
+          <span id="nut-chart-meta" class="font-mono text-[10px] text-[var(--muted-foreground)]">Peak: —</span>
+        </div>
+        <canvas id="nut-chart" height="115" class="w-full cursor-pointer" style="image-rendering:auto;"></canvas>
+      </div>
+
+      <!-- Stats card -->
+      <div class="rounded-xl bg-[var(--card)] border border-[var(--card-border)] p-3 space-y-2 text-xs">
+        <div class="font-semibold text-[var(--muted-foreground)] uppercase tracking-wider text-[11px]">Step Stats</div>
+        <div class="grid grid-cols-2 gap-x-2 gap-y-1.5 font-mono">
+          <span class="text-[var(--muted-foreground)]">Position</span><span id="stat-pos" class="font-semibold">(0, 0)</span>
+          <span class="text-[var(--muted-foreground)]">Action</span><span id="stat-action" class="font-semibold text-blue-500">—</span>
+          <span class="text-[var(--muted-foreground)]">Moves left</span><span id="stat-moves" class="font-semibold">22</span>
+          <span class="text-[var(--muted-foreground)]">Dist. home</span><span id="stat-dist" class="font-semibold">0</span>
+          <span class="text-[var(--muted-foreground)]">Safety margin</span><span id="stat-margin" class="font-semibold">22</span>
+          <span class="text-[var(--muted-foreground)]">Carrying</span><span id="stat-carry" class="font-semibold">No</span>
+          <span class="text-[var(--muted-foreground)]">Nuts eaten</span><span id="stat-eaten" class="font-semibold">0</span>
+          <span class="text-[var(--muted-foreground)]">Quota</span><span id="stat-quota" class="font-semibold">0 / 2</span>
+          <span class="text-[var(--muted-foreground)]">Caches in ground</span><span id="stat-caches" class="font-semibold">0</span>
+        </div>
+
+        <!-- Season summary totals -->
+        <div class="border-t border-[var(--card-border)] pt-2 mt-1 grid grid-cols-2 gap-x-2 gap-y-1 font-mono text-[11px]">
+          <span class="text-[var(--muted-foreground)]">Total buried</span><span id="stat-total-buried" class="font-semibold text-amber-500">0</span>
+          <span class="text-[var(--muted-foreground)]">Total retrieved</span><span id="stat-total-ret" class="font-semibold text-purple-500">0</span>
+        </div>
+      </div>
+
+      <!-- Event log -->
+      <div class="rounded-xl bg-[var(--card)] border border-[var(--card-border)] p-3 flex flex-col gap-2 text-xs flex-1 min-h-40">
+        <div class="font-semibold text-[var(--muted-foreground)] uppercase tracking-wider text-[11px] flex items-center justify-between">
+          <span>Event Log (this day)</span>
+          <span id="event-count" class="font-mono text-[var(--muted-foreground)]">0 events</span>
+        </div>
+        <div id="step-log" class="flex flex-col gap-1 overflow-y-auto max-h-60 font-mono text-[11px]"></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+// ---- LOAD DATA ----
+let RAW = null;
+let currentDayIdx = 0;
+let currentStepIdx = 0;
+let playing = false;
+let playInterval = null;
+let cacheState = {}; // key "x,y" -> true
+let lastLogDay = -1;
+let lastLogStep = -1;
+
+// Grid bounds & cell size (computed dynamically from trajectory in initViewport)
+let CELL = 20;
+let MIN_X = -11, MAX_X = 11;
+let MIN_Y = -10, MAX_Y = 10;
+let GRID_COLS = 23;
+let GRID_ROWS = 21;
+
+// Data is inlined — no fetch needed
+RAW = {"config":{"move_budget":22,"daily_winter_quota":3,"p_find_summer":0.2,"summer_days":30,"winter_days":30,"seed":999,"final_status":"survived_winter","total_summer_buried":104,"total_winter_retrieved":90},"days":[{"s":"s","d":1,"nc":4,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":[],"ca":[],"cr":[]},{"n":1,"p":[2,0],"a":"E","c":0,"e":0,"m":20,"ev":["Found & buried nut at (2, 0)"],"ca":[[2,0]],"cr":[]},{"n":2,"p":[3,0],"a":"E","c":0,"e":0,"m":19,"ev":[],"ca":[],"cr":[]},{"n":3,"p":[4,0],"a":"E","c":0,"e":0,"m":18,"ev":[],"ca":[],"cr":[]},{"n":4,"p":[5,0],"a":"E","c":0,"e":0,"m":17,"ev":[],"ca":[],"cr":[]},{"n":5,"p":[6,0],"a":"E","c":0,"e":0,"m":16,"ev":["Found & buried nut at (6, 0)"],"ca":[[6,0]],"cr":[]},{"n":6,"p":[6,1],"a":"N","c":0,"e":0,"m":15,"ev":[],"ca":[],"cr":[]},{"n":7,"p":[7,1],"a":"E","c":0,"e":0,"m":14,"ev":[],"ca":[],"cr":[]},{"n":8,"p":[8,1],"a":"E","c":0,"e":0,"m":13,"ev":[],"ca":[],"cr":[]},{"n":9,"p":[8,2],"a":"N","c":0,"e":0,"m":12,"ev":[],"ca":[],"cr":[]},{"n":10,"p":[8,3],"a":"N","c":0,"e":0,"m":11,"ev":["Found & buried nut at (8, 3)"],"ca":[[8,3]],"cr":[]},{"n":11,"p":[7,3],"a":"N","c":0,"e":0,"m":10,"ev":[],"ca":[],"cr":[]},{"n":12,"p":[6,3],"a":"N","c":0,"e":0,"m":9,"ev":["Found & buried nut at (6, 3)"],"ca":[[6,3]],"cr":[]},{"n":13,"p":[5,3],"a":"N","c":0,"e":0,"m":8,"ev":[],"ca":[],"cr":[]},{"n":14,"p":[4,3],"a":"E","c":0,"e":0,"m":7,"ev":[],"ca":[],"cr":[]},{"n":15,"p":[3,3],"a":"E","c":0,"e":0,"m":6,"ev":[],"ca":[],"cr":[]},{"n":16,"p":[2,3],"a":"E","c":0,"e":0,"m":5,"ev":[],"ca":[],"cr":[]},{"n":17,"p":[1,3],"a":"E","c":0,"e":0,"m":4,"ev":[],"ca":[],"cr":[]},{"n":18,"p":[0,3],"a":"E","c":0,"e":0,"m":3,"ev":[],"ca":[],"cr":[]},{"n":19,"p":[0,2],"a":"E","c":0,"e":0,"m":2,"ev":[],"ca":[],"cr":[]},{"n":20,"p":[0,1],"a":"E","c":0,"e":0,"m":1,"ev":[],"ca":[],"cr":[]},{"n":21,"p":[0,0],"a":"E","c":0,"e":0,"m":22,"ev":["Returned safely to burrow!"],"ca":[],"cr":[]}]},{"s":"s","d":2,"nc":10,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":["Found & buried nut at (1, 0)"],"ca":[[1,0]],"cr":[]},{"n":1,"p":[2,0],"a":"E","c":1,"e":0,"m":20,"ev":["Found surface nut! (Picked up)"],"ca":[],"cr":[]},{"n":2,"p":[3,0],"a":"E","c":0,"e":0,"m":19,"ev":["Buried nut at (3, 0)"],"ca":[[3,0]],"cr":[]},{"n":3,"p":[4,0],"a":"E","c":0,"e":0,"m":18,"ev":[],"ca":[],"cr":[]},{"n":4,"p":[5,0],"a":"E","c":0,"e":0,"m":17,"ev":[],"ca":[],"cr":[]},{"n":5,"p":[6,0],"a":"E","c":0,"e":0,"m":16,"ev":[],"ca":[],"cr":[]},{"n":6,"p":[6,1],"a":"N","c":0,"e":0,"m":15,"ev":["Found & buried nut at (6, 1)"],"ca":[[6,1]],"cr":[]},{"n":7,"p":[6,2],"a":"N","c":0,"e":0,"m":14,"ev":[],"ca":[],"cr":[]},{"n":8,"p":[7,2],"a":"E","c":0,"e":0,"m":13,"ev":["Found & buried nut at (7, 2)"],"ca":[[7,2]],"cr":[]},{"n":9,"p":[7,3],"a":"N","c":0,"e":0,"m":12,"ev":[],"ca":[],"cr":[]},{"n":10,"p":[8,3],"a":"E","c":0,"e":0,"m":11,"ev":[],"ca":[],"cr":[]},{"n":11,"p":[7,3],"a":"N","c":0,"e":0,"m":10,"ev":[],"ca":[],"cr":[]},{"n":12,"p":[6,3],"a":"N","c":0,"e":0,"m":9,"ev":[],"ca":[],"cr":[]},{"n":13,"p":[5,3],"a":"N","c":0,"e":0,"m":8,"ev":[],"ca":[],"cr":[]},{"n":14,"p":[4,3],"a":"E","c":0,"e":0,"m":7,"ev":[],"ca":[],"cr":[]},{"n":15,"p":[3,3],"a":"E","c":0,"e":0,"m":6,"ev":["Found & buried nut at (3, 3)"],"ca":[[3,3]],"cr":[]},{"n":16,"p":[2,3],"a":"N","c":0,"e":0,"m":5,"ev":[],"ca":[],"cr":[]},{"n":17,"p":[1,3],"a":"E","c":0,"e":0,"m":4,"ev":[],"ca":[],"cr":[]},{"n":18,"p":[0,3],"a":"E","c":0,"e":0,"m":3,"ev":[],"ca":[],"cr":[]},{"n":19,"p":[0,2],"a":"E","c":0,"e":0,"m":2,"ev":[],"ca":[],"cr":[]},{"n":20,"p":[0,1],"a":"E","c":0,"e":0,"m":1,"ev":["Found & buried nut at (0, 1)"],"ca":[[0,1]],"cr":[]},{"n":21,"p":[0,0],"a":"E","c":0,"e":0,"m":22,"ev":["Returned safely to burrow!"],"ca":[],"cr":[]}]},{"s":"s","d":3,"nc":13,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":[],"ca":[],"cr":[]},{"n":1,"p":[2,0],"a":"E","c":0,"e":0,"m":20,"ev":[],"ca":[],"cr":[]},{"n":2,"p":[3,0],"a":"E","c":0,"e":0,"m":19,"ev":[],"ca":[],"cr":[]},{"n":3,"p":[4,0],"a":"E","c":0,"e":0,"m":18,"ev":[],"ca":[],"cr":[]},{"n":4,"p":[5,0],"a":"E","c":0,"e":0,"m":17,"ev":[],"ca":[],"cr":[]},{"n":5,"p":[6,0],"a":"E","c":1,"e":0,"m":16,"ev":["Found surface nut! (Picked up)"],"ca":[],"cr":[]},{"n":6,"p":[7,0],"a":"E","c":0,"e":0,"m":15,"ev":["Buried nut at (7, 0)"],"ca":[[7,0]],"cr":[]},{"n":7,"p":[7,1],"a":"N","c":0,"e":0,"m":14,"ev":[],"ca":[],"cr":[]},{"n":8,"p":[8,1],"a":"E","c":0,"e":0,"m":13,"ev":[],"ca":[],"cr":[]},{"n":9,"p":[9,1],"a":"E","c":0,"e":0,"m":12,"ev":["Found & buried nut at (9, 1)"],"ca":[[9,1]],"cr":[]},{"n":10,"p":[9,2],"a":"N","c":0,"e":0,"m":11,"ev":[],"ca":[],"cr":[]},{"n":11,"p":[8,2],"a":"S","c":0,"e":0,"m":10,"ev":[],"ca":[],"cr":[]},{"n":12,"p":[7,2],"a":"E","c":1,"e":0,"m":9,"ev":["Found surface nut! (Picked up)"],"ca":[],"cr":[]},{"n":13,"p":[6,2],"a":"E","c":0,"e":0,"m":8,"ev":["Buried nut at (6, 2)"],"ca":[[6,2]],"cr":[]},{"n":14,"p":[5,2],"a":"N","c":0,"e":0,"m":7,"ev":[],"ca":[],"cr":[]},{"n":15,"p":[4,2],"a":"E","c":0,"e":0,"m":6,"ev":[],"ca":[],"cr":[]},{"n":16,"p":[3,2],"a":"E","c":0,"e":0,"m":5,"ev":[],"ca":[],"cr":[]},{"n":17,"p":[2,2],"a":"E","c":0,"e":0,"m":4,"ev":[],"ca":[],"cr":[]},{"n":18,"p":[1,2],"a":"E","c":0,"e":0,"m":3,"ev":[],"ca":[],"cr":[]},{"n":19,"p":[0,2],"a":"E","c":0,"e":0,"m":2,"ev":[],"ca":[],"cr":[]},{"n":20,"p":[0,1],"a":"E","c":0,"e":0,"m":1,"ev":[],"ca":[],"cr":[]},{"n":21,"p":[0,0],"a":"E","c":0,"e":0,"m":22,"ev":["Returned safely to burrow!"],"ca":[],"cr":[]}]},{"s":"s","d":4,"nc":17,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":[],"ca":[],"cr":[]},{"n":1,"p":[2,0],"a":"E","c":0,"e":0,"m":20,"ev":[],"ca":[],"cr":[]},{"n":2,"p":[3,0],"a":"E","c":0,"e":0,"m":19,"ev":[],"ca":[],"cr":[]},{"n":3,"p":[4,0],"a":"E","c":0,"e":0,"m":18,"ev":["Found & buried nut at (4, 0)"],"ca":[[4,0]],"cr":[]},{"n":4,"p":[5,0],"a":"E","c":0,"e":0,"m":17,"ev":[],"ca":[],"cr":[]},{"n":5,"p":[6,0],"a":"E","c":0,"e":0,"m":16,"ev":[],"ca":[],"cr":[]},{"n":6,"p":[7,0],"a":"E","c":0,"e":0,"m":15,"ev":[],"ca":[],"cr":[]},{"n":7,"p":[8,0],"a":"E","c":0,"e":0,"m":14,"ev":[],"ca":[],"cr":[]},{"n":8,"p":[9,0],"a":"E","c":0,"e":0,"m":13,"ev":[],"ca":[],"cr":[]},{"n":9,"p":[10,0],"a":"E","c":0,"e":0,"m":12,"ev":["Found & buried nut at (10, 0)"],"ca":[[10,0]],"cr":[]},{"n":10,"p":[10,-1],"a":"S","c":0,"e":0,"m":11,"ev":[],"ca":[],"cr":[]},{"n":11,"p":[9,-1],"a":"S","c":0,"e":0,"m":10,"ev":[],"ca":[],"cr":[]},{"n":12,"p":[8,-1],"a":"S","c":0,"e":0,"m":9,"ev":[],"ca":[],"cr":[]},{"n":13,"p":[7,-1],"a":"E","c":0,"e":0,"m":8,"ev":["Found & buried nut at (7, -1)"],"ca":[[7,-1]],"cr":[]},{"n":14,"p":[6,-1],"a":"S","c":0,"e":0,"m":7,"ev":[],"ca":[],"cr":[]},{"n":15,"p":[5,-1],"a":"E","c":0,"e":0,"m":6,"ev":[],"ca":[],"cr":[]},{"n":16,"p":[4,-1],"a":"E","c":0,"e":0,"m":5,"ev":["Found & buried nut at (4, -1)"],"ca":[[4,-1]],"cr":[]},{"n":17,"p":[3,-1],"a":"E","c":0,"e":0,"m":4,"ev":[],"ca":[],"cr":[]},{"n":18,"p":[2,-1],"a":"E","c":0,"e":0,"m":3,"ev":[],"ca":[],"cr":[]},{"n":19,"p":[1,-1],"a":"E","c":0,"e":0,"m":2,"ev":[],"ca":[],"cr":[]},{"n":20,"p":[0,-1],"a":"E","c":0,"e":0,"m":1,"ev":[],"ca":[],"cr":[]},{"n":21,"p":[0,0],"a":"E","c":0,"e":0,"m":22,"ev":["Returned safely to burrow!"],"ca":[],"cr":[]}]},{"s":"s","d":5,"nc":22,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":[],"ca":[],"cr":[]},{"n":1,"p":[2,0],"a":"E","c":1,"e":0,"m":20,"ev":["Found surface nut! (Picked up)"],"ca":[],"cr":[]},{"n":2,"p":[3,0],"a":"E","c":1,"e":0,"m":19,"ev":[],"ca":[],"cr":[]},{"n":3,"p":[4,0],"a":"E","c":1,"e":0,"m":18,"ev":[],"ca":[],"cr":[]},{"n":4,"p":[5,0],"a":"E","c":0,"e":0,"m":17,"ev":["Buried nut at (5, 0)"],"ca":[[5,0]],"cr":[]},{"n":5,"p":[6,0],"a":"E","c":0,"e":0,"m":16,"ev":[],"ca":[],"cr":[]},{"n":6,"p":[7,0],"a":"E","c":1,"e":0,"m":15,"ev":["Found surface nut! (Picked up)"],"ca":[],"cr":[]},{"n":7,"p":[8,0],"a":"E","c":0,"e":0,"m":14,"ev":["Buried nut at (8, 0)"],"ca":[[8,0]],"cr":[]},{"n":8,"p":[8,-1],"a":"S","c":0,"e":0,"m":13,"ev":[],"ca":[],"cr":[]},{"n":9,"p":[9,-1],"a":"E","c":0,"e":0,"m":12,"ev":["Found & buried nut at (9, -1)"],"ca":[[9,-1]],"cr":[]},{"n":10,"p":[9,-2],"a":"S","c":0,"e":0,"m":11,"ev":[],"ca":[],"cr":[]},{"n":11,"p":[8,-2],"a":"S","c":0,"e":0,"m":10,"ev":[],"ca":[],"cr":[]},{"n":12,"p":[7,-2],"a":"S","c":0,"e":0,"m":9,"ev":[],"ca":[],"cr":[]},{"n":13,"p":[6,-2],"a":"E","c":0,"e":0,"m":8,"ev":["Found & buried nut at (6, -2)"],"ca":[[6,-2]],"cr":[]},{"n":14,"p":[5,-2],"a":"S","c":0,"e":0,"m":7,"ev":[],"ca":[],"cr":[]},{"n":15,"p":[4,-2],"a":"E","c":0,"e":0,"m":6,"ev":[],"ca":[],"cr":[]},{"n":16,"p":[3,-2],"a":"E","c":0,"e":0,"m":5,"ev":["Found & buried nut at (3, -2)"],"ca":[[3,-2]],"cr":[]},{"n":17,"p":[2,-2],"a":"E","c":0,"e":0,"m":4,"ev":[],"ca":[],"cr":[]},{"n":18,"p":[1,-2],"a":"E","c":0,"e":0,"m":3,"ev":[],"ca":[],"cr":[]},{"n":19,"p":[0,-2],"a":"E","c":0,"e":0,"m":2,"ev":[],"ca":[],"cr":[]},{"n":20,"p":[0,-1],"a":"E","c":0,"e":0,"m":1,"ev":[],"ca":[],"cr":[]},{"n":21,"p":[0,0],"a":"E","c":0,"e":0,"m":22,"ev":["Returned safely to burrow!"],"ca":[],"cr":[]}]},{"s":"s","d":6,"nc":24,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":[],"ca":[],"cr":[]},{"n":1,"p":[2,0],"a":"E","c":0,"e":0,"m":20,"ev":[],"ca":[],"cr":[]},{"n":2,"p":[3,0],"a":"E","c":0,"e":0,"m":19,"ev":[],"ca":[],"cr":[]},{"n":3,"p":[4,0],"a":"E","c":0,"e":0,"m":18,"ev":[],"ca":[],"cr":[]},{"n":4,"p":[5,0],"a":"E","c":1,"e":0,"m":17,"ev":["Found surface nut! (Picked up)"],"ca":[],"cr":[]},{"n":5,"p":[6,0],"a":"E","c":1,"e":0,"m":16,"ev":[],"ca":[],"cr":[]},{"n":6,"p":[7,0],"a":"E","c":1,"e":0,"m":15,"ev":[],"ca":[],"cr":[]},{"n":7,"p":[8,0],"a":"E","c":1,"e":0,"m":14,"ev":[],"ca":[],"cr":[]},{"n":8,"p":[9,0],"a":"E","c":0,"e":0,"m":13,"ev":["Buried nut at (9, 0)"],"ca":[[9,0]],"cr":[]},{"n":9,"p":[9,-1],"a":"S","c":0,"e":0,"m":12,"ev":[],"ca":[],"cr":[]},{"n":10,"p":[9,-2],"a":"S","c":0,"e":0,"m":11,"ev":[],"ca":[],"cr":[]},{"n":11,"p":[8,-2],"a":"S","c":0,"e":0,"m":10,"ev":[],"ca":[],"cr":[]},{"n":12,"p":[7,-2],"a":"S","c":0,"e":0,"m":9,"ev":[],"ca":[],"cr":[]},{"n":13,"p":[6,-2],"a":"S","c":0,"e":0,"m":8,"ev":[],"ca":[],"cr":[]},{"n":14,"p":[5,-2],"a":"S","c":0,"e":0,"m":7,"ev":[],"ca":[],"cr":[]},{"n":15,"p":[4,-2],"a":"E","c":0,"e":0,"m":6,"ev":[],"ca":[],"cr":[]},{"n":16,"p":[3,-2],"a":"E","c":0,"e":0,"m":5,"ev":[],"ca":[],"cr":[]},{"n":17,"p":[2,-2],"a":"E","c":0,"e":0,"m":4,"ev":[],"ca":[],"cr":[]},{"n":18,"p":[1,-2],"a":"E","c":0,"e":0,"m":3,"ev":[],"ca":[],"cr":[]},{"n":19,"p":[0,-2],"a":"E","c":0,"e":0,"m":2,"ev":["Found & buried nut at (0, -2)"],"ca":[[0,-2]],"cr":[]},{"n":20,"p":[0,-1],"a":"E","c":0,"e":0,"m":1,"ev":[],"ca":[],"cr":[]},{"n":21,"p":[0,0],"a":"E","c":0,"e":0,"m":22,"ev":["Returned safely to burrow!"],"ca":[],"cr":[]}]},{"s":"s","d":7,"nc":26,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":[],"ca":[],"cr":[]},{"n":1,"p":[2,0],"a":"E","c":0,"e":0,"m":20,"ev":[],"ca":[],"cr":[]},{"n":2,"p":[3,0],"a":"E","c":0,"e":0,"m":19,"ev":[],"ca":[],"cr":[]},{"n":3,"p":[4,0],"a":"E","c":0,"e":0,"m":18,"ev":[],"ca":[],"cr":[]},{"n":4,"p":[5,0],"a":"E","c":0,"e":0,"m":17,"ev":[],"ca":[],"cr":[]},{"n":5,"p":[6,0],"a":"E","c":0,"e":0,"m":16,"ev":[],"ca":[],"cr":[]},{"n":6,"p":[6,-1],"a":"S","c":0,"e":0,"m":15,"ev":[],"ca":[],"cr":[]},{"n":7,"p":[7,-1],"a":"E","c":0,"e":0,"m":14,"ev":[],"ca":[],"cr":[]},{"n":8,"p":[7,-2],"a":"S","c":0,"e":0,"m":13,"ev":["Found & buried nut at (7, -2)"],"ca":[[7,-2]],"cr":[]},{"n":9,"p":[7,-3],"a":"S","c":0,"e":0,"m":12,"ev":[],"ca":[],"cr":[]},{"n":10,"p":[7,-4],"a":"S","c":0,"e":0,"m":11,"ev":[],"ca":[],"cr":[]},{"n":11,"p":[6,-4],"a":"S","c":0,"e":0,"m":10,"ev":[],"ca":[],"cr":[]},{"n":12,"p":[5,-4],"a":"S","c":0,"e":0,"m":9,"ev":[],"ca":[],"cr":[]},{"n":13,"p":[4,-4],"a":"E","c":0,"e":0,"m":8,"ev":[],"ca":[],"cr":[]},{"n":14,"p":[3,-4],"a":"E","c":0,"e":0,"m":7,"ev":[],"ca":[],"cr":[]},{"n":15,"p":[2,-4],"a":"E","c":0,"e":0,"m":6,"ev":[],"ca":[],"cr":[]},{"n":16,"p":[1,-4],"a":"E","c":0,"e":0,"m":5,"ev":["Found & buried nut at (1, -4)"],"ca":[[1,-4]],"cr":[]},{"n":17,"p":[0,-4],"a":"E","c":0,"e":0,"m":4,"ev":[],"ca":[],"cr":[]},{"n":18,"p":[0,-3],"a":"E","c":0,"e":0,"m":3,"ev":[],"ca":[],"cr":[]},{"n":19,"p":[0,-2],"a":"E","c":0,"e":0,"m":2,"ev":[],"ca":[],"cr":[]},{"n":20,"p":[0,-1],"a":"E","c":0,"e":0,"m":1,"ev":[],"ca":[],"cr":[]},{"n":21,"p":[0,0],"a":"E","c":0,"e":0,"m":22,"ev":["Returned safely to burrow!"],"ca":[],"cr":[]}]},{"s":"s","d":8,"nc":28,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":[],"ca":[],"cr":[]},{"n":1,"p":[2,0],"a":"E","c":0,"e":0,"m":20,"ev":[],"ca":[],"cr":[]},{"n":2,"p":[3,0],"a":"E","c":0,"e":0,"m":19,"ev":[],"ca":[],"cr":[]},{"n":3,"p":[4,0],"a":"E","c":0,"e":0,"m":18,"ev":[],"ca":[],"cr":[]},{"n":4,"p":[5,0],"a":"E","c":1,"e":0,"m":17,"ev":["Found surface nut! (Picked up)"],"ca":[],"cr":[]},{"n":5,"p":[6,0],"a":"E","c":1,"e":0,"m":16,"ev":[],"ca":[],"cr":[]},{"n":6,"p":[7,0],"a":"E","c":1,"e":0,"m":15,"ev":[],"ca":[],"cr":[]},{"n":7,"p":[8,0],"a":"E","c":1,"e":0,"m":14,"ev":[],"ca":[],"cr":[]},{"n":8,"p":[9,0],"a":"E","c":1,"e":0,"m":13,"ev":[],"ca":[],"cr":[]},{"n":9,"p":[10,0],"a":"E","c":1,"e":0,"m":12,"ev":[],"ca":[],"cr":[]},{"n":10,"p":[10,-1],"a":"S","c":0,"e":0,"m":11,"ev":["Buried nut at (10, -1)"],"ca":[[10,-1]],"cr":[]},{"n":11,"p":[9,-1],"a":"S","c":0,"e":0,"m":10,"ev":[],"ca":[],"cr":[]},{"n":12,"p":[8,-1],"a":"S","c":0,"e":0,"m":9,"ev":[],"ca":[],"cr":[]},{"n":13,"p":[7,-1],"a":"S","c":0,"e":0,"m":8,"ev":[],"ca":[],"cr":[]},{"n":14,"p":[6,-1],"a":"S","c":0,"e":0,"m":7,"ev":[],"ca":[],"cr":[]},{"n":15,"p":[5,-1],"a":"S","c":0,"e":0,"m":6,"ev":["Found & buried nut at (5, -1)"],"ca":[[5,-1]],"cr":[]},{"n":16,"p":[4,-1],"a":"S","c":0,"e":0,"m":5,"ev":[],"ca":[],"cr":[]},{"n":17,"p":[3,-1],"a":"S","c":0,"e":0,"m":4,"ev":[],"ca":[],"cr":[]},{"n":18,"p":[2,-1],"a":"E","c":0,"e":0,"m":3,"ev":[],"ca":[],"cr":[]},{"n":19,"p":[1,-1],"a":"E","c":0,"e":0,"m":2,"ev":[],"ca":[],"cr":[]},{"n":20,"p":[0,-1],"a":"E","c":0,"e":0,"m":1,"ev":[],"ca":[],"cr":[]},{"n":21,"p":[0,0],"a":"E","c":0,"e":0,"m":22,"ev":["Returned safely to burrow!"],"ca":[],"cr":[]}]},{"s":"s","d":9,"nc":31,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":1,"e":0,"m":21,"ev":["Found surface nut! (Picked up)"],"ca":[],"cr":[]},{"n":1,"p":[2,0],"a":"E","c":1,"e":0,"m":20,"ev":[],"ca":[],"cr":[]},{"n":2,"p":[3,0],"a":"E","c":1,"e":0,"m":19,"ev":[],"ca":[],"cr":[]},{"n":3,"p":[4,0],"a":"E","c":1,"e":0,"m":18,"ev":[],"ca":[],"cr":[]},{"n":4,"p":[5,0],"a":"E","c":1,"e":0,"m":17,"ev":[],"ca":[],"cr":[]},{"n":5,"p":[6,0],"a":"E","c":1,"e":0,"m":16,"ev":[],"ca":[],"cr":[]},{"n":6,"p":[7,0],"a":"E","c":1,"e":0,"m":15,"ev":[],"ca":[],"cr":[]},{"n":7,"p":[8,0],"a":"E","c":1,"e":0,"m":14,"ev":[],"ca":[],"cr":[]},{"n":8,"p":[9,0],"a":"E","c":1,"e":0,"m":13,"ev":[],"ca":[],"cr":[]},{"n":9,"p":[9,-1],"a":"S","c":1,"e":0,"m":12,"ev":[],"ca":[],"cr":[]},{"n":10,"p":[9,-2],"a":"S","c":0,"e":0,"m":11,"ev":["Buried nut at (9, -2)"],"ca":[[9,-2]],"cr":[]},{"n":11,"p":[8,-2],"a":"S","c":0,"e":0,"m":10,"ev":[],"ca":[],"cr":[]},{"n":12,"p":[7,-2],"a":"S","c":0,"e":0,"m":9,"ev":[],"ca":[],"cr":[]},{"n":13,"p":[6,-2],"a":"S","c":0,"e":0,"m":8,"ev":[],"ca":[],"cr":[]},{"n":14,"p":[5,-2],"a":"S","c":0,"e":0,"m":7,"ev":["Found & buried nut at (5, -2)"],"ca":[[5,-2]],"cr":[]},{"n":15,"p":[4,-2],"a":"S","c":0,"e":0,"m":6,"ev":[],"ca":[],"cr":[]},{"n":16,"p":[3,-2],"a":"S","c":0,"e":0,"m":5,"ev":[],"ca":[],"cr":[]},{"n":17,"p":[2,-2],"a":"S","c":0,"e":0,"m":4,"ev":["Found & buried nut at (2, -2)"],"ca":[[2,-2]],"cr":[]},{"n":18,"p":[1,-2],"a":"S","c":0,"e":0,"m":3,"ev":[],"ca":[],"cr":[]},{"n":19,"p":[0,-2],"a":"E","c":0,"e":0,"m":2,"ev":[],"ca":[],"cr":[]},{"n":20,"p":[0,-1],"a":"E","c":0,"e":0,"m":1,"ev":[],"ca":[],"cr":[]},{"n":21,"p":[0,0],"a":"E","c":0,"e":0,"m":22,"ev":["Returned safely to burrow!"],"ca":[],"cr":[]}]},{"s":"s","d":10,"nc":34,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":1,"e":0,"m":21,"ev":["Found surface nut! (Picked up)"],"ca":[],"cr":[]},{"n":1,"p":[2,0],"a":"E","c":1,"e":0,"m":20,"ev":[],"ca":[],"cr":[]},{"n":2,"p":[3,0],"a":"E","c":1,"e":0,"m":19,"ev":[],"ca":[],"cr":[]},{"n":3,"p":[4,0],"a":"E","c":1,"e":0,"m":18,"ev":[],"ca":[],"cr":[]},{"n":4,"p":[5,0],"a":"E","c":1,"e":0,"m":17,"ev":[],"ca":[],"cr":[]},{"n":5,"p":[6,0],"a":"E","c":1,"e":0,"m":16,"ev":[],"ca":[],"cr":[]},{"n":6,"p":[7,0],"a":"E","c":1,"e":0,"m":15,"ev":[],"ca":[],"cr":[]},{"n":7,"p":[8,0],"a":"E","c":1,"e":0,"m":14,"ev":[],"ca":[],"cr":[]},{"n":8,"p":[8,-1],"a":"S","c":0,"e":0,"m":13,"ev":["Buried nut at (8, -1)"],"ca":[[8,-1]],"cr":[]},{"n":9,"p":[8,-2],"a":"S","c":0,"e":0,"m":12,"ev":[],"ca":[],"cr":[]},{"n":10,"p":[8,-3],"a":"S","c":0,"e":0,"m":11,"ev":[],"ca":[],"cr":[]},{"n":11,"p":[7,-3],"a":"S","c":0,"e":0,"m":10,"ev":[],"ca":[],"cr":[]},{"n":12,"p":[6,-3],"a":"S","c":0,"e":0,"m":9,"ev":[],"ca":[],"cr":[]},{"n":13,"p":[5,-3],"a":"S","c":0,"e":0,"m":8,"ev":[],"ca":[],"cr":[]},{"n":14,"p":[4,-3],"a":"S","c":0,"e":0,"m":7,"ev":["Found & buried nut at (4, -3)"],"ca":[[4,-3]],"cr":[]},{"n":15,"p":[3,-3],"a":"S","c":0,"e":0,"m":6,"ev":["Found & buried nut at (3, -3)"],"ca":[[3,-3]],"cr":[]},{"n":16,"p":[2,-3],"a":"S","c":0,"e":0,"m":5,"ev":[],"ca":[],"cr":[]},{"n":17,"p":[1,-3],"a":"E","c":0,"e":0,"m":4,"ev":[],"ca":[],"cr":[]},{"n":18,"p":[0,-3],"a":"E","c":0,"e":0,"m":3,"ev":[],"ca":[],"cr":[]},{"n":19,"p":[0,-2],"a":"E","c":0,"e":0,"m":2,"ev":[],"ca":[],"cr":[]},{"n":20,"p":[0,-1],"a":"S","c":0,"e":0,"m":1,"ev":[],"ca":[],"cr":[]},{"n":21,"p":[0,0],"a":"E","c":0,"e":0,"m":22,"ev":["Returned safely to burrow!"],"ca":[],"cr":[]}]},{"s":"s","d":11,"nc":38,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":[],"ca":[],"cr":[]},{"n":1,"p":[2,0],"a":"E","c":0,"e":0,"m":20,"ev":[],"ca":[],"cr":[]},{"n":2,"p":[3,0],"a":"E","c":0,"e":0,"m":19,"ev":[],"ca":[],"cr":[]},{"n":3,"p":[3,-1],"a":"S","c":0,"e":0,"m":18,"ev":[],"ca":[],"cr":[]},{"n":4,"p":[4,-1],"a":"E","c":0,"e":0,"m":17,"ev":[],"ca":[],"cr":[]},{"n":5,"p":[4,-2],"a":"S","c":0,"e":0,"m":16,"ev":["Found & buried nut at (4, -2)"],"ca":[[4,-2]],"cr":[]},{"n":6,"p":[4,-3],"a":"S","c":0,"e":0,"m":15,"ev":[],"ca":[],"cr":[]},{"n":7,"p":[4,-4],"a":"S","c":0,"e":0,"m":14,"ev":["Found & buried nut at (4, -4)"],"ca":[[4,-4]],"cr":[]},{"n":8,"p":[4,-5],"a":"S","c":0,"e":0,"m":13,"ev":[],"ca":[],"cr":[]},{"n":9,"p":[4,-6],"a":"S","c":0,"e":0,"m":12,"ev":["Found & buried nut at (4, -6)"],"ca":[[4,-6]],"cr":[]},{"n":10,"p":[4,-7],"a":"S","c":0,"e":0,"m":11,"ev":[],"ca":[],"cr":[]},{"n":11,"p":[3,-7],"a":"S","c":0,"e":0,"m":10,"ev":[],"ca":[],"cr":[]},{"n":12,"p":[2,-7],"a":"S","c":0,"e":0,"m":9,"ev":["Found & buried nut at (2, -7)"],"ca":[[2,-7]],"cr":[]},{"n":13,"p":[1,-7],"a":"S","c":0,"e":0,"m":8,"ev":[],"ca":[],"cr":[]},{"n":14,"p":[0,-7],"a":"S","c":0,"e":0,"m":7,"ev":[],"ca":[],"cr":[]},{"n":15,"p":[0,-6],"a":"E","c":0,"e":0,"m":6,"ev":[],"ca":[],"cr":[]},{"n":16,"p":[0,-5],"a":"E","c":0,"e":0,"m":5,"ev":[],"ca":[],"cr":[]},{"n":17,"p":[0,-4],"a":"E","c":0,"e":0,"m":4,"ev":[],"ca":[],"cr":[]},{"n":18,"p":[0,-3],"a":"E","c":0,"e":0,"m":3,"ev":[],"ca":[],"cr":[]},{"n":19,"p":[0,-2],"a":"E","c":0,"e":0,"m":2,"ev":[],"ca":[],"cr":[]},{"n":20,"p":[0,-1],"a":"S","c":0,"e":0,"m":1,"ev":[],"ca":[],"cr":[]},{"n":21,"p":[0,0],"a":"E","c":0,"e":0,"m":22,"ev":["Returned safely to burrow!"],"ca":[],"cr":[]}]},{"s":"s","d":12,"nc":41,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":[],"ca":[],"cr":[]},{"n":1,"p":[2,0],"a":"E","c":0,"e":0,"m":20,"ev":[],"ca":[],"cr":[]},{"n":2,"p":[2,-1],"a":"S","c":0,"e":0,"m":19,"ev":[],"ca":[],"cr":[]},{"n":3,"p":[3,-1],"a":"E","c":0,"e":0,"m":18,"ev":[],"ca":[],"cr":[]},{"n":4,"p":[3,-2],"a":"S","c":0,"e":0,"m":17,"ev":[],"ca":[],"cr":[]},{"n":5,"p":[3,-3],"a":"S","c":0,"e":0,"m":16,"ev":[],"ca":[],"cr":[]},{"n":6,"p":[3,-4],"a":"S","c":0,"e":0,"m":15,"ev":[],"ca":[],"cr":[]},{"n":7,"p":[3,-5],"a":"S","c":0,"e":0,"m":14,"ev":["Found & buried nut at (3, -5)"],"ca":[[3,-5]],"cr":[]},{"n":8,"p":[3,-6],"a":"S","c":0,"e":0,"m":13,"ev":["Found & buried nut at (3, -6)"],"ca":[[3,-6]],"cr":[]},{"n":9,"p":[3,-7],"a":"S","c":0,"e":0,"m":12,"ev":[],"ca":[],"cr":[]},{"n":10,"p":[3,-8],"a":"S","c":0,"e":0,"m":11,"ev":[],"ca":[],"cr":[]},{"n":11,"p":[2,-8],"a":"S","c":0,"e":0,"m":10,"ev":["Found & buried nut at (2, -8)"],"ca":[[2,-8]],"cr":[]},{"n":12,"p":[1,-8],"a":"S","c":0,"e":0,"m":9,"ev":[],"ca":[],"cr":[]},{"n":13,"p":[0,-8],"a":"S","c":0,"e":0,"m":8,"ev":[],"ca":[],"cr":[]},{"n":14,"p":[0,-7],"a":"S","c":0,"e":0,"m":7,"ev":[],"ca":[],"cr":[]},{"n":15,"p":[0,-6],"a":"S","c":0,"e":0,"m":6,"ev":[],"ca":[],"cr":[]},{"n":16,"p":[0,-5],"a":"S","c":0,"e":0,"m":5,"ev":[],"ca":[],"cr":[]},{"n":17,"p":[0,-4],"a":"S","c":0,"e":0,"m":4,"ev":[],"ca":[],"cr":[]},{"n":18,"p":[0,-3],"a":"S","c":0,"e":0,"m":3,"ev":[],"ca":[],"cr":[]},{"n":19,"p":[0,-2],"a":"E","c":0,"e":0,"m":2,"ev":[],"ca":[],"cr":[]},{"n":20,"p":[0,-1],"a":"S","c":0,"e":0,"m":1,"ev":[],"ca":[],"cr":[]},{"n":21,"p":[0,0],"a":"E","c":0,"e":0,"m":22,"ev":["Returned safely to burrow!"],"ca":[],"cr":[]}]},{"s":"s","d":13,"nc":46,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":[],"ca":[],"cr":[]},{"n":1,"p":[1,-1],"a":"S","c":0,"e":0,"m":20,"ev":["Found & buried nut at (1, -1)"],"ca":[[1,-1]],"cr":[]},{"n":2,"p":[1,-2],"a":"S","c":0,"e":0,"m":19,"ev":[],"ca":[],"cr":[]},{"n":3,"p":[2,-2],"a":"E","c":0,"e":0,"m":18,"ev":[],"ca":[],"cr":[]},{"n":4,"p":[2,-3],"a":"S","c":0,"e":0,"m":17,"ev":[],"ca":[],"cr":[]},{"n":5,"p":[2,-4],"a":"S","c":0,"e":0,"m":16,"ev":[],"ca":[],"cr":[]},{"n":6,"p":[2,-5],"a":"S","c":0,"e":0,"m":15,"ev":[],"ca":[],"cr":[]},{"n":7,"p":[2,-6],"a":"S","c":0,"e":0,"m":14,"ev":[],"ca":[],"cr":[]},{"n":8,"p":[2,-7],"a":"S","c":1,"e":0,"m":13,"ev":["Found surface nut! (Picked up)"],"ca":[],"cr":[]},{"n":9,"p":[2,-8],"a":"S","c":1,"e":0,"m":12,"ev":[],"ca":[],"cr":[]},{"n":10,"p":[2,-9],"a":"S","c":0,"e":0,"m":11,"ev":["Buried nut at (2, -9)"],"ca":[[2,-9]],"cr":[]},{"n":11,"p":[1,-9],"a":"S","c":0,"e":0,"m":10,"ev":[],"ca":[],"cr":[]},{"n":12,"p":[0,-9],"a":"S","c":0,"e":0,"m":9,"ev":[],"ca":[],"cr":[]},{"n":13,"p":[0,-8],"a":"S","c":0,"e":0,"m":8,"ev":[],"ca":[],"cr":[]},{"n":14,"p":[0,-7],"a":"S","c":0,"e":0,"m":7,"ev":["Found & buried nut at (0, -7)"],"ca":[[0,-7]],"cr":[]},{"n":15,"p":[0,-6],"a":"S","c":0,"e":0,"m":6,"ev":["Found & buried nut at (0, -6)"],"ca":[[0,-6]],"cr":[]},{"n":16,"p":[0,-5],"a":"S","c":0,"e":0,"m":5,"ev":[],"ca":[],"cr":[]},{"n":17,"p":[0,-4],"a":"S","c":0,"e":0,"m":4,"ev":[],"ca":[],"cr":[]},{"n":18,"p":[0,-3],"a":"S","c":0,"e":0,"m":3,"ev":[],"ca":[],"cr":[]},{"n":19,"p":[0,-2],"a":"S","c":0,"e":0,"m":2,"ev":[],"ca":[],"cr":[]},{"n":20,"p":[0,-1],"a":"S","c":0,"e":0,"m":1,"ev":["Found & buried nut at (0, -1)"],"ca":[[0,-1]],"cr":[]},{"n":21,"p":[0,0],"a":"S","c":0,"e":0,"m":22,"ev":["Returned safely to burrow!"],"ca":[],"cr":[]}]},{"s":"s","d":14,"nc":48,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":[],"ca":[],"cr":[]},{"n":1,"p":[1,-1],"a":"S","c":1,"e":0,"m":20,"ev":["Found surface nut! (Picked up)"],"ca":[],"cr":[]},{"n":2,"p":[2,-1],"a":"E","c":0,"e":0,"m":19,"ev":["Buried nut at (2, -1)"],"ca":[[2,-1]],"cr":[]},{"n":3,"p":[2,-2],"a":"S","c":0,"e":0,"m":18,"ev":[],"ca":[],"cr":[]},{"n":4,"p":[2,-3],"a":"S","c":0,"e":0,"m":17,"ev":["Found & buried nut at (2, -3)"],"ca":[[2,-3]],"cr":[]},{"n":5,"p":[2,-4],"a":"S","c":0,"e":0,"m":16,"ev":[],"ca":[],"cr":[]},{"n":6,"p":[2,-5],"a":"S","c":0,"e":0,"m":15,"ev":[],"ca":[],"cr":[]},{"n":7,"p":[2,-6],"a":"S","c":0,"e":0,"m":14,"ev":[],"ca":[],"cr":[]},{"n":8,"p":[2,-7],"a":"S","c":0,"e":0,"m":13,"ev":[],"ca":[],"cr":[]},{"n":9,"p":[2,-8],"a":"S","c":0,"e":0,"m":12,"ev":[],"ca":[],"cr":[]},{"n":10,"p":[2,-9],"a":"S","c":0,"e":0,"m":11,"ev":[],"ca":[],"cr":[]},{"n":11,"p":[1,-9],"a":"S","c":0,"e":0,"m":10,"ev":[],"ca":[],"cr":[]},{"n":12,"p":[0,-9],"a":"S","c":0,"e":0,"m":9,"ev":[],"ca":[],"cr":[]},{"n":13,"p":[0,-8],"a":"S","c":0,"e":0,"m":8,"ev":[],"ca":[],"cr":[]},{"n":14,"p":[0,-7],"a":"S","c":0,"e":0,"m":7,"ev":[],"ca":[],"cr":[]},{"n":15,"p":[0,-6],"a":"S","c":0,"e":0,"m":6,"ev":[],"ca":[],"cr":[]},{"n":16,"p":[0,-5],"a":"S","c":0,"e":0,"m":5,"ev":[],"ca":[],"cr":[]},{"n":17,"p":[0,-4],"a":"S","c":0,"e":0,"m":4,"ev":[],"ca":[],"cr":[]},{"n":18,"p":[0,-3],"a":"S","c":0,"e":0,"m":3,"ev":[],"ca":[],"cr":[]},{"n":19,"p":[0,-2],"a":"S","c":0,"e":0,"m":2,"ev":[],"ca":[],"cr":[]},{"n":20,"p":[0,-1],"a":"S","c":0,"e":0,"m":1,"ev":[],"ca":[],"cr":[]},{"n":21,"p":[0,0],"a":"S","c":0,"e":0,"m":22,"ev":["Returned safely to burrow!"],"ca":[],"cr":[]}]},{"s":"s","d":15,"nc":51,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":[],"ca":[],"cr":[]},{"n":1,"p":[1,-1],"a":"S","c":1,"e":0,"m":20,"ev":["Found surface nut! (Picked up)"],"ca":[],"cr":[]},{"n":2,"p":[2,-1],"a":"E","c":1,"e":0,"m":19,"ev":[],"ca":[],"cr":[]},{"n":3,"p":[3,-1],"a":"E","c":0,"e":0,"m":18,"ev":["Buried nut at (3, -1)"],"ca":[[3,-1]],"cr":[]},{"n":4,"p":[3,-2],"a":"S","c":1,"e":0,"m":17,"ev":["Found surface nut! (Picked up)"],"ca":[],"cr":[]},{"n":5,"p":[3,-3],"a":"S","c":1,"e":0,"m":16,"ev":[],"ca":[],"cr":[]},{"n":6,"p":[3,-4],"a":"S","c":0,"e":0,"m":15,"ev":["Buried nut at (3, -4)"],"ca":[[3,-4]],"cr":[]},{"n":7,"p":[3,-5],"a":"S","c":0,"e":0,"m":14,"ev":[],"ca":[],"cr":[]},{"n":8,"p":[3,-6],"a":"S","c":0,"e":0,"m":13,"ev":[],"ca":[],"cr":[]},{"n":9,"p":[3,-7],"a":"S","c":0,"e":0,"m":12,"ev":[],"ca":[],"cr":[]},{"n":10,"p":[3,-8],"a":"S","c":0,"e":0,"m":11,"ev":["Found & buried nut at (3, -8)"],"ca":[[3,-8]],"cr":[]},{"n":11,"p":[2,-8],"a":"S","c":0,"e":0,"m":10,"ev":[],"ca":[],"cr":[]},{"n":12,"p":[1,-8],"a":"S","c":0,"e":0,"m":9,"ev":[],"ca":[],"cr":[]},{"n":13,"p":[0,-8],"a":"S","c":0,"e":0,"m":8,"ev":[],"ca":[],"cr":[]},{"n":14,"p":[0,-7],"a":"S","c":0,"e":0,"m":7,"ev":[],"ca":[],"cr":[]},{"n":15,"p":[0,-6],"a":"S","c":0,"e":0,"m":6,"ev":[],"ca":[],"cr":[]},{"n":16,"p":[0,-5],"a":"S","c":0,"e":0,"m":5,"ev":[],"ca":[],"cr":[]},{"n":17,"p":[0,-4],"a":"S","c":0,"e":0,"m":4,"ev":[],"ca":[],"cr":[]},{"n":18,"p":[0,-3],"a":"S","c":0,"e":0,"m":3,"ev":[],"ca":[],"cr":[]},{"n":19,"p":[0,-2],"a":"S","c":0,"e":0,"m":2,"ev":[],"ca":[],"cr":[]},{"n":20,"p":[0,-1],"a":"S","c":0,"e":0,"m":1,"ev":[],"ca":[],"cr":[]},{"n":21,"p":[0,0],"a":"S","c":0,"e":0,"m":22,"ev":["Returned safely to burrow!"],"ca":[],"cr":[]}]},{"s":"s","d":16,"nc":56,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":[],"ca":[],"cr":[]},{"n":1,"p":[1,-1],"a":"S","c":0,"e":0,"m":20,"ev":[],"ca":[],"cr":[]},{"n":2,"p":[1,-2],"a":"S","c":0,"e":0,"m":19,"ev":[],"ca":[],"cr":[]},{"n":3,"p":[1,-3],"a":"S","c":0,"e":0,"m":18,"ev":["Found & buried nut at (1, -3)"],"ca":[[1,-3]],"cr":[]},{"n":4,"p":[1,-4],"a":"S","c":0,"e":0,"m":17,"ev":[],"ca":[],"cr":[]},{"n":5,"p":[1,-5],"a":"S","c":0,"e":0,"m":16,"ev":[],"ca":[],"cr":[]},{"n":6,"p":[1,-6],"a":"S","c":0,"e":0,"m":15,"ev":[],"ca":[],"cr":[]},{"n":7,"p":[1,-7],"a":"S","c":0,"e":0,"m":14,"ev":["Found & buried nut at (1, -7)"],"ca":[[1,-7]],"cr":[]},{"n":8,"p":[1,-8],"a":"S","c":0,"e":0,"m":13,"ev":["Found & buried nut at (1, -8)"],"ca":[[1,-8]],"cr":[]},{"n":9,"p":[1,-9],"a":"S","c":0,"e":0,"m":12,"ev":[],"ca":[],"cr":[]},{"n":10,"p":[1,-10],"a":"S","c":0,"e":0,"m":11,"ev":[],"ca":[],"cr":[]},{"n":11,"p":[0,-10],"a":"S","c":0,"e":0,"m":10,"ev":[],"ca":[],"cr":[]},{"n":12,"p":[0,-9],"a":"S","c":0,"e":0,"m":9,"ev":["Found & buried nut at (0, -9)"],"ca":[[0,-9]],"cr":[]},{"n":13,"p":[0,-8],"a":"S","c":0,"e":0,"m":8,"ev":[],"ca":[],"cr":[]},{"n":14,"p":[0,-7],"a":"S","c":0,"e":0,"m":7,"ev":[],"ca":[],"cr":[]},{"n":15,"p":[0,-6],"a":"S","c":0,"e":0,"m":6,"ev":[],"ca":[],"cr":[]},{"n":16,"p":[0,-5],"a":"S","c":0,"e":0,"m":5,"ev":[],"ca":[],"cr":[]},{"n":17,"p":[0,-4],"a":"S","c":0,"e":0,"m":4,"ev":["Found & buried nut at (0, -4)"],"ca":[[0,-4]],"cr":[]},{"n":18,"p":[0,-3],"a":"S","c":0,"e":0,"m":3,"ev":[],"ca":[],"cr":[]},{"n":19,"p":[0,-2],"a":"S","c":0,"e":0,"m":2,"ev":[],"ca":[],"cr":[]},{"n":20,"p":[0,-1],"a":"S","c":0,"e":0,"m":1,"ev":[],"ca":[],"cr":[]},{"n":21,"p":[0,0],"a":"S","c":0,"e":0,"m":22,"ev":["Returned safely to burrow!"],"ca":[],"cr":[]}]},{"s":"s","d":17,"nc":60,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":[],"ca":[],"cr":[]},{"n":1,"p":[1,-1],"a":"S","c":0,"e":0,"m":20,"ev":[],"ca":[],"cr":[]},{"n":2,"p":[1,-2],"a":"S","c":0,"e":0,"m":19,"ev":["Found & buried nut at (1, -2)"],"ca":[[1,-2]],"cr":[]},{"n":3,"p":[1,-3],"a":"S","c":0,"e":0,"m":18,"ev":[],"ca":[],"cr":[]},{"n":4,"p":[1,-4],"a":"S","c":0,"e":0,"m":17,"ev":[],"ca":[],"cr":[]},{"n":5,"p":[1,-5],"a":"S","c":0,"e":0,"m":16,"ev":[],"ca":[],"cr":[]},{"n":6,"p":[1,-6],"a":"S","c":0,"e":0,"m":15,"ev":["Found & buried nut at (1, -6)"],"ca":[[1,-6]],"cr":[]},{"n":7,"p":[1,-7],"a":"S","c":0,"e":0,"m":14,"ev":[],"ca":[],"cr":[]},{"n":8,"p":[1,-8],"a":"S","c":1,"e":0,"m":13,"ev":["Found surface nut! (Picked up)"],"ca":[],"cr":[]},{"n":9,"p":[1,-9],"a":"S","c":0,"e":0,"m":12,"ev":["Buried nut at (1, -9)"],"ca":[[1,-9]],"cr":[]},{"n":10,"p":[1,-10],"a":"S","c":0,"e":0,"m":11,"ev":[],"ca":[],"cr":[]},{"n":11,"p":[0,-10],"a":"S","c":0,"e":0,"m":10,"ev":[],"ca":[],"cr":[]},{"n":12,"p":[0,-9],"a":"S","c":0,"e":0,"m":9,"ev":[],"ca":[],"cr":[]},{"n":13,"p":[0,-8],"a":"S","c":0,"e":0,"m":8,"ev":[],"ca":[],"cr":[]},{"n":14,"p":[0,-7],"a":"S","c":0,"e":0,"m":7,"ev":[],"ca":[],"cr":[]},{"n":15,"p":[0,-6],"a":"S","c":0,"e":0,"m":6,"ev":[],"ca":[],"cr":[]},{"n":16,"p":[0,-5],"a":"S","c":0,"e":0,"m":5,"ev":[],"ca":[],"cr":[]},{"n":17,"p":[0,-4],"a":"S","c":1,"e":0,"m":4,"ev":["Found surface nut! (Picked up)"],"ca":[],"cr":[]},{"n":18,"p":[0,-3],"a":"S","c":0,"e":0,"m":3,"ev":["Buried nut at (0, -3)"],"ca":[[0,-3]],"cr":[]},{"n":19,"p":[0,-2],"a":"S","c":0,"e":0,"m":2,"ev":[],"ca":[],"cr":[]},{"n":20,"p":[0,-1],"a":"S","c":1,"e":0,"m":1,"ev":["Found surface nut! (Picked up)"],"ca":[],"cr":[]},{"n":21,"p":[0,0],"a":"S","c":0,"e":0,"m":22,"ev":["Returned safely to burrow!"],"ca":[],"cr":[]}]},{"s":"s","d":18,"nc":63,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":[],"ca":[],"cr":[]},{"n":1,"p":[1,-1],"a":"S","c":0,"e":0,"m":20,"ev":[],"ca":[],"cr":[]},{"n":2,"p":[1,-2],"a":"S","c":1,"e":0,"m":19,"ev":["Found surface nut! (Picked up)"],"ca":[],"cr":[]},{"n":3,"p":[2,-2],"a":"E","c":1,"e":0,"m":18,"ev":[],"ca":[],"cr":[]},{"n":4,"p":[2,-3],"a":"S","c":1,"e":0,"m":17,"ev":[],"ca":[],"cr":[]},{"n":5,"p":[2,-4],"a":"S","c":0,"e":0,"m":16,"ev":["Buried nut at (2, -4)"],"ca":[[2,-4]],"cr":[]},{"n":6,"p":[2,-5],"a":"S","c":0,"e":0,"m":15,"ev":["Found & buried nut at (2, -5)"],"ca":[[2,-5]],"cr":[]},{"n":7,"p":[2,-6],"a":"S","c":0,"e":0,"m":14,"ev":[],"ca":[],"cr":[]},{"n":8,"p":[2,-7],"a":"S","c":0,"e":0,"m":13,"ev":[],"ca":[],"cr":[]},{"n":9,"p":[2,-8],"a":"S","c":0,"e":0,"m":12,"ev":[],"ca":[],"cr":[]},{"n":10,"p":[2,-9],"a":"S","c":0,"e":0,"m":11,"ev":[],"ca":[],"cr":[]},{"n":11,"p":[1,-9],"a":"S","c":1,"e":0,"m":10,"ev":["Found surface nut! (Picked up)"],"ca":[],"cr":[]},{"n":12,"p":[0,-9],"a":"S","c":1,"e":0,"m":9,"ev":[],"ca":[],"cr":[]},{"n":13,"p":[0,-8],"a":"S","c":0,"e":0,"m":8,"ev":["Buried nut at (0, -8)"],"ca":[[0,-8]],"cr":[]},{"n":14,"p":[0,-7],"a":"S","c":0,"e":0,"m":7,"ev":[],"ca":[],"cr":[]},{"n":15,"p":[0,-6],"a":"S","c":0,"e":0,"m":6,"ev":[],"ca":[],"cr":[]},{"n":16,"p":[0,-5],"a":"S","c":0,"e":0,"m":5,"ev":[],"ca":[],"cr":[]},{"n":17,"p":[0,-4],"a":"S","c":0,"e":0,"m":4,"ev":[],"ca":[],"cr":[]},{"n":18,"p":[0,-3],"a":"S","c":0,"e":0,"m":3,"ev":[],"ca":[],"cr":[]},{"n":19,"p":[0,-2],"a":"S","c":0,"e":0,"m":2,"ev":[],"ca":[],"cr":[]},{"n":20,"p":[0,-1],"a":"S","c":1,"e":0,"m":1,"ev":["Found surface nut! (Picked up)"],"ca":[],"cr":[]},{"n":21,"p":[0,0],"a":"E","c":0,"e":0,"m":22,"ev":["Returned safely to burrow!"],"ca":[],"cr":[]}]},{"s":"s","d":19,"nc":66,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":[],"ca":[],"cr":[]},{"n":1,"p":[1,-1],"a":"S","c":0,"e":0,"m":20,"ev":[],"ca":[],"cr":[]},{"n":2,"p":[1,-2],"a":"S","c":0,"e":0,"m":19,"ev":[],"ca":[],"cr":[]},{"n":3,"p":[1,-3],"a":"S","c":0,"e":0,"m":18,"ev":[],"ca":[],"cr":[]},{"n":4,"p":[1,-4],"a":"S","c":0,"e":0,"m":17,"ev":[],"ca":[],"cr":[]},{"n":5,"p":[1,-5],"a":"S","c":0,"e":0,"m":16,"ev":[],"ca":[],"cr":[]},{"n":6,"p":[1,-6],"a":"S","c":0,"e":0,"m":15,"ev":[],"ca":[],"cr":[]},{"n":7,"p":[1,-7],"a":"S","c":1,"e":0,"m":14,"ev":["Found surface nut! (Picked up)"],"ca":[],"cr":[]},{"n":8,"p":[1,-8],"a":"S","c":1,"e":0,"m":13,"ev":[],"ca":[],"cr":[]},{"n":9,"p":[1,-9],"a":"S","c":1,"e":0,"m":12,"ev":[],"ca":[],"cr":[]},{"n":10,"p":[1,-10],"a":"S","c":0,"e":0,"m":11,"ev":["Buried nut at (1, -10)"],"ca":[[1,-10]],"cr":[]},{"n":11,"p":[0,-10],"a":"S","c":0,"e":0,"m":10,"ev":["Found & buried nut at (0, -10)"],"ca":[[0,-10]],"cr":[]},{"n":12,"p":[0,-9],"a":"S","c":0,"e":0,"m":9,"ev":[],"ca":[],"cr":[]},{"n":13,"p":[0,-8],"a":"S","c":0,"e":0,"m":8,"ev":[],"ca":[],"cr":[]},{"n":14,"p":[0,-7],"a":"S","c":1,"e":0,"m":7,"ev":["Found surface nut! (Picked up)"],"ca":[],"cr":[]},{"n":15,"p":[0,-6],"a":"S","c":1,"e":0,"m":6,"ev":[],"ca":[],"cr":[]},{"n":16,"p":[0,-5],"a":"S","c":0,"e":0,"m":5,"ev":["Buried nut at (0, -5)"],"ca":[[0,-5]],"cr":[]},{"n":17,"p":[0,-4],"a":"S","c":0,"e":0,"m":4,"ev":[],"ca":[],"cr":[]},{"n":18,"p":[0,-3],"a":"S","c":0,"e":0,"m":3,"ev":[],"ca":[],"cr":[]},{"n":19,"p":[0,-2],"a":"S","c":0,"e":0,"m":2,"ev":[],"ca":[],"cr":[]},{"n":20,"p":[0,-1],"a":"S","c":0,"e":0,"m":1,"ev":[],"ca":[],"cr":[]},{"n":21,"p":[0,0],"a":"S","c":0,"e":0,"m":22,"ev":["Returned safely to burrow!"],"ca":[],"cr":[]}]},{"s":"s","d":20,"nc":68,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":[],"ca":[],"cr":[]},{"n":1,"p":[1,1],"a":"N","c":0,"e":0,"m":20,"ev":[],"ca":[],"cr":[]},{"n":2,"p":[2,1],"a":"E","c":0,"e":0,"m":19,"ev":[],"ca":[],"cr":[]},{"n":3,"p":[2,0],"a":"S","c":1,"e":0,"m":18,"ev":["Found surface nut! (Picked up)"],"ca":[],"cr":[]},{"n":4,"p":[3,0],"a":"E","c":1,"e":0,"m":17,"ev":[],"ca":[],"cr":[]},{"n":5,"p":[3,1],"a":"N","c":0,"e":0,"m":16,"ev":["Buried nut at (3, 1)"],"ca":[[3,1]],"cr":[]},{"n":6,"p":[3,2],"a":"N","c":0,"e":0,"m":15,"ev":[],"ca":[],"cr":[]},{"n":7,"p":[3,1],"a":"S","c":1,"e":0,"m":14,"ev":["Found surface nut! (Picked up)"],"ca":[],"cr":[]},{"n":8,"p":[3,2],"a":"N","c":0,"e":0,"m":13,"ev":["Buried nut at (3, 2)"],"ca":[[3,2]],"cr":[]},{"n":9,"p":[3,3],"a":"N","c":0,"e":0,"m":12,"ev":[],"ca":[],"cr":[]},{"n":10,"p":[3,4],"a":"N","c":0,"e":0,"m":11,"ev":[],"ca":[],"cr":[]},{"n":11,"p":[3,3],"a":"S","c":0,"e":0,"m":10,"ev":[],"ca":[],"cr":[]},{"n":12,"p":[3,2],"a":"S","c":0,"e":0,"m":9,"ev":[],"ca":[],"cr":[]},{"n":13,"p":[3,1],"a":"S","c":0,"e":0,"m":8,"ev":[],"ca":[],"cr":[]},{"n":14,"p":[3,0],"a":"S","c":0,"e":0,"m":7,"ev":[],"ca":[],"cr":[]},{"n":15,"p":[3,-1],"a":"S","c":0,"e":0,"m":6,"ev":[],"ca":[],"cr":[]},{"n":16,"p":[3,-2],"a":"S","c":0,"e":0,"m":5,"ev":[],"ca":[],"cr":[]},{"n":17,"p":[2,-2],"a":"S","c":0,"e":0,"m":4,"ev":[],"ca":[],"cr":[]},{"n":18,"p":[1,-2],"a":"S","c":0,"e":0,"m":3,"ev":[],"ca":[],"cr":[]},{"n":19,"p":[0,-2],"a":"S","c":0,"e":0,"m":2,"ev":[],"ca":[],"cr":[]},{"n":20,"p":[0,-1],"a":"S","c":1,"e":0,"m":1,"ev":["Found surface nut! (Picked up)"],"ca":[],"cr":[]},{"n":21,"p":[0,0],"a":"E","c":0,"e":0,"m":22,"ev":["Returned safely to burrow!"],"ca":[],"cr":[]}]},{"s":"s","d":21,"nc":74,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":[],"ca":[],"cr":[]},{"n":1,"p":[1,1],"a":"N","c":0,"e":0,"m":20,"ev":["Found & buried nut at (1, 1)"],"ca":[[1,1]],"cr":[]},{"n":2,"p":[1,2],"a":"N","c":0,"e":0,"m":19,"ev":[],"ca":[],"cr":[]},{"n":3,"p":[2,2],"a":"E","c":0,"e":0,"m":18,"ev":["Found & buried nut at (2, 2)"],"ca":[[2,2]],"cr":[]},{"n":4,"p":[2,3],"a":"N","c":0,"e":0,"m":17,"ev":[],"ca":[],"cr":[]},{"n":5,"p":[2,4],"a":"N","c":0,"e":0,"m":16,"ev":[],"ca":[],"cr":[]},{"n":6,"p":[2,5],"a":"N","c":0,"e":0,"m":15,"ev":[],"ca":[],"cr":[]},{"n":7,"p":[2,6],"a":"N","c":0,"e":0,"m":14,"ev":[],"ca":[],"cr":[]},{"n":8,"p":[2,7],"a":"N","c":0,"e":0,"m":13,"ev":[],"ca":[],"cr":[]},{"n":9,"p":[2,8],"a":"N","c":0,"e":0,"m":12,"ev":[],"ca":[],"cr":[]},{"n":10,"p":[2,9],"a":"N","c":0,"e":0,"m":11,"ev":["Found & buried nut at (2, 9)"],"ca":[[2,9]],"cr":[]},{"n":11,"p":[1,9],"a":"N","c":0,"e":0,"m":10,"ev":[],"ca":[],"cr":[]},{"n":12,"p":[0,9],"a":"N","c":0,"e":0,"m":9,"ev":["Found & buried nut at (0, 9)"],"ca":[[0,9]],"cr":[]},{"n":13,"p":[0,8],"a":"N","c":0,"e":0,"m":8,"ev":[],"ca":[],"cr":[]},{"n":14,"p":[0,7],"a":"N","c":0,"e":0,"m":7,"ev":[],"ca":[],"cr":[]},{"n":15,"p":[0,6],"a":"N","c":0,"e":0,"m":6,"ev":["Found & buried nut at (0, 6)"],"ca":[[0,6]],"cr":[]},{"n":16,"p":[0,5],"a":"N","c":0,"e":0,"m":5,"ev":[],"ca":[],"cr":[]},{"n":17,"p":[0,4],"a":"N","c":0,"e":0,"m":4,"ev":[],"ca":[],"cr":[]},{"n":18,"p":[0,3],"a":"N","c":0,"e":0,"m":3,"ev":["Found & buried nut at (0, 3)"],"ca":[[0,3]],"cr":[]},{"n":19,"p":[0,2],"a":"N","c":0,"e":0,"m":2,"ev":[],"ca":[],"cr":[]},{"n":20,"p":[0,1],"a":"N","c":0,"e":0,"m":1,"ev":[],"ca":[],"cr":[]},{"n":21,"p":[0,0],"a":"N","c":0,"e":0,"m":22,"ev":["Returned safely to burrow!"],"ca":[],"cr":[]}]},{"s":"s","d":22,"nc":80,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":[],"ca":[],"cr":[]},{"n":1,"p":[1,1],"a":"N","c":0,"e":0,"m":20,"ev":[],"ca":[],"cr":[]},{"n":2,"p":[1,2],"a":"N","c":0,"e":0,"m":19,"ev":["Found & buried nut at (1, 2)"],"ca":[[1,2]],"cr":[]},{"n":3,"p":[1,3],"a":"N","c":0,"e":0,"m":18,"ev":["Found & buried nut at (1, 3)"],"ca":[[1,3]],"cr":[]},{"n":4,"p":[1,4],"a":"N","c":0,"e":0,"m":17,"ev":[],"ca":[],"cr":[]},{"n":5,"p":[1,5],"a":"N","c":0,"e":0,"m":16,"ev":["Found & buried nut at (1, 5)"],"ca":[[1,5]],"cr":[]},{"n":6,"p":[1,6],"a":"N","c":0,"e":0,"m":15,"ev":[],"ca":[],"cr":[]},{"n":7,"p":[1,7],"a":"N","c":0,"e":0,"m":14,"ev":[],"ca":[],"cr":[]},{"n":8,"p":[1,8],"a":"N","c":0,"e":0,"m":13,"ev":["Found & buried nut at (1, 8)"],"ca":[[1,8]],"cr":[]},{"n":9,"p":[1,9],"a":"N","c":0,"e":0,"m":12,"ev":[],"ca":[],"cr":[]},{"n":10,"p":[1,10],"a":"N","c":0,"e":0,"m":11,"ev":[],"ca":[],"cr":[]},{"n":11,"p":[0,10],"a":"N","c":0,"e":0,"m":10,"ev":[],"ca":[],"cr":[]},{"n":12,"p":[0,9],"a":"N","c":0,"e":0,"m":9,"ev":[],"ca":[],"cr":[]},{"n":13,"p":[0,8],"a":"N","c":0,"e":0,"m":8,"ev":[],"ca":[],"cr":[]},{"n":14,"p":[0,7],"a":"N","c":0,"e":0,"m":7,"ev":[],"ca":[],"cr":[]},{"n":15,"p":[0,6],"a":"N","c":0,"e":0,"m":6,"ev":[],"ca":[],"cr":[]},{"n":16,"p":[0,5],"a":"N","c":0,"e":0,"m":5,"ev":["Found & buried nut at (0, 5)"],"ca":[[0,5]],"cr":[]},{"n":17,"p":[0,4],"a":"N","c":0,"e":0,"m":4,"ev":[],"ca":[],"cr":[]},{"n":18,"p":[0,3],"a":"N","c":1,"e":0,"m":3,"ev":["Found surface nut! (Picked up)"],"ca":[],"cr":[]},{"n":19,"p":[0,2],"a":"E","c":0,"e":0,"m":2,"ev":["Buried nut at (0, 2)"],"ca":[[0,2]],"cr":[]},{"n":20,"p":[0,1],"a":"N","c":0,"e":0,"m":1,"ev":[],"ca":[],"cr":[]},{"n":21,"p":[0,0],"a":"N","c":0,"e":0,"m":22,"ev":["Returned safely to burrow!"],"ca":[],"cr":[]}]},{"s":"s","d":23,"nc":85,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":[],"ca":[],"cr":[]},{"n":1,"p":[1,1],"a":"N","c":1,"e":0,"m":20,"ev":["Found surface nut! (Picked up)"],"ca":[],"cr":[]},{"n":2,"p":[2,1],"a":"E","c":0,"e":0,"m":19,"ev":["Buried nut at (2, 1)"],"ca":[[2,1]],"cr":[]},{"n":3,"p":[2,2],"a":"N","c":0,"e":0,"m":18,"ev":[],"ca":[],"cr":[]},{"n":4,"p":[2,3],"a":"N","c":0,"e":0,"m":17,"ev":[],"ca":[],"cr":[]},{"n":5,"p":[2,4],"a":"N","c":0,"e":0,"m":16,"ev":["Found & buried nut at (2, 4)"],"ca":[[2,4]],"cr":[]},{"n":6,"p":[2,5],"a":"N","c":0,"e":0,"m":15,"ev":[],"ca":[],"cr":[]},{"n":7,"p":[2,6],"a":"N","c":0,"e":0,"m":14,"ev":["Found & buried nut at (2, 6)"],"ca":[[2,6]],"cr":[]},{"n":8,"p":[2,7],"a":"N","c":0,"e":0,"m":13,"ev":[],"ca":[],"cr":[]},{"n":9,"p":[2,8],"a":"N","c":0,"e":0,"m":12,"ev":[],"ca":[],"cr":[]},{"n":10,"p":[2,9],"a":"N","c":0,"e":0,"m":11,"ev":[],"ca":[],"cr":[]},{"n":11,"p":[1,9],"a":"N","c":0,"e":0,"m":10,"ev":[],"ca":[],"cr":[]},{"n":12,"p":[0,9],"a":"N","c":1,"e":0,"m":9,"ev":["Found surface nut! (Picked up)"],"ca":[],"cr":[]},{"n":13,"p":[0,8],"a":"E","c":0,"e":0,"m":8,"ev":["Buried nut at (0, 8)"],"ca":[[0,8]],"cr":[]},{"n":14,"p":[0,7],"a":"N","c":0,"e":0,"m":7,"ev":["Found & buried nut at (0, 7)"],"ca":[[0,7]],"cr":[]},{"n":15,"p":[0,6],"a":"N","c":0,"e":0,"m":6,"ev":[],"ca":[],"cr":[]},{"n":16,"p":[0,5],"a":"N","c":0,"e":0,"m":5,"ev":[],"ca":[],"cr":[]},{"n":17,"p":[0,4],"a":"N","c":0,"e":0,"m":4,"ev":[],"ca":[],"cr":[]},{"n":18,"p":[0,3],"a":"N","c":0,"e":0,"m":3,"ev":[],"ca":[],"cr":[]},{"n":19,"p":[0,2],"a":"N","c":0,"e":0,"m":2,"ev":[],"ca":[],"cr":[]},{"n":20,"p":[0,1],"a":"N","c":0,"e":0,"m":1,"ev":[],"ca":[],"cr":[]},{"n":21,"p":[0,0],"a":"N","c":0,"e":0,"m":22,"ev":["Returned safely to burrow!"],"ca":[],"cr":[]}]},{"s":"s","d":24,"nc":89,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":[],"ca":[],"cr":[]},{"n":1,"p":[1,1],"a":"N","c":0,"e":0,"m":20,"ev":[],"ca":[],"cr":[]},{"n":2,"p":[1,2],"a":"N","c":1,"e":0,"m":19,"ev":["Found surface nut! (Picked up)"],"ca":[],"cr":[]},{"n":3,"p":[2,2],"a":"E","c":1,"e":0,"m":18,"ev":[],"ca":[],"cr":[]},{"n":4,"p":[3,2],"a":"E","c":1,"e":0,"m":17,"ev":[],"ca":[],"cr":[]},{"n":5,"p":[4,2],"a":"E","c":0,"e":0,"m":16,"ev":["Buried nut at (4, 2)"],"ca":[[4,2]],"cr":[]},{"n":6,"p":[4,3],"a":"N","c":0,"e":0,"m":15,"ev":[],"ca":[],"cr":[]},{"n":7,"p":[4,4],"a":"N","c":0,"e":0,"m":14,"ev":[],"ca":[],"cr":[]},{"n":8,"p":[4,5],"a":"N","c":0,"e":0,"m":13,"ev":[],"ca":[],"cr":[]},{"n":9,"p":[4,6],"a":"N","c":0,"e":0,"m":12,"ev":[],"ca":[],"cr":[]},{"n":10,"p":[4,7],"a":"N","c":0,"e":0,"m":11,"ev":["Found & buried nut at (4, 7)"],"ca":[[4,7]],"cr":[]},{"n":11,"p":[3,7],"a":"N","c":0,"e":0,"m":10,"ev":[],"ca":[],"cr":[]},{"n":12,"p":[2,7],"a":"N","c":0,"e":0,"m":9,"ev":["Found & buried nut at (2, 7)"],"ca":[[2,7]],"cr":[]},{"n":13,"p":[1,7],"a":"N","c":0,"e":0,"m":8,"ev":[],"ca":[],"cr":[]},{"n":14,"p":[0,7],"a":"N","c":0,"e":0,"m":7,"ev":[],"ca":[],"cr":[]},{"n":15,"p":[0,6],"a":"N","c":0,"e":0,"m":6,"ev":[],"ca":[],"cr":[]},{"n":16,"p":[0,5],"a":"N","c":0,"e":0,"m":5,"ev":[],"ca":[],"cr":[]},{"n":17,"p":[0,4],"a":"N","c":0,"e":0,"m":4,"ev":["Found & buried nut at (0, 4)"],"ca":[[0,4]],"cr":[]},{"n":18,"p":[0,3],"a":"N","c":0,"e":0,"m":3,"ev":[],"ca":[],"cr":[]},{"n":19,"p":[0,2],"a":"N","c":0,"e":0,"m":2,"ev":[],"ca":[],"cr":[]},{"n":20,"p":[0,1],"a":"N","c":0,"e":0,"m":1,"ev":[],"ca":[],"cr":[]},{"n":21,"p":[0,0],"a":"N","c":0,"e":0,"m":22,"ev":["Returned safely to burrow!"],"ca":[],"cr":[]}]},{"s":"s","d":25,"nc":92,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":[],"ca":[],"cr":[]},{"n":1,"p":[1,1],"a":"N","c":1,"e":0,"m":20,"ev":["Found surface nut! (Picked up)"],"ca":[],"cr":[]},{"n":2,"p":[2,1],"a":"E","c":1,"e":0,"m":19,"ev":[],"ca":[],"cr":[]},{"n":3,"p":[3,1],"a":"E","c":1,"e":0,"m":18,"ev":[],"ca":[],"cr":[]},{"n":4,"p":[4,1],"a":"E","c":0,"e":0,"m":17,"ev":["Buried nut at (4, 1)"],"ca":[[4,1]],"cr":[]},{"n":5,"p":[4,2],"a":"N","c":0,"e":0,"m":16,"ev":[],"ca":[],"cr":[]},{"n":6,"p":[4,3],"a":"N","c":0,"e":0,"m":15,"ev":[],"ca":[],"cr":[]},{"n":7,"p":[4,4],"a":"N","c":0,"e":0,"m":14,"ev":[],"ca":[],"cr":[]},{"n":8,"p":[4,5],"a":"N","c":0,"e":0,"m":13,"ev":["Found & buried nut at (4, 5)"],"ca":[[4,5]],"cr":[]},{"n":9,"p":[4,6],"a":"N","c":0,"e":0,"m":12,"ev":[],"ca":[],"cr":[]},{"n":10,"p":[4,7],"a":"N","c":1,"e":0,"m":11,"ev":["Found surface nut! (Picked up)"],"ca":[],"cr":[]},{"n":11,"p":[3,7],"a":"N","c":0,"e":0,"m":10,"ev":["Buried nut at (3, 7)"],"ca":[[3,7]],"cr":[]},{"n":12,"p":[2,7],"a":"N","c":0,"e":0,"m":9,"ev":[],"ca":[],"cr":[]},{"n":13,"p":[1,7],"a":"N","c":0,"e":0,"m":8,"ev":[],"ca":[],"cr":[]},{"n":14,"p":[0,7],"a":"N","c":0,"e":0,"m":7,"ev":[],"ca":[],"cr":[]},{"n":15,"p":[0,6],"a":"N","c":0,"e":0,"m":6,"ev":[],"ca":[],"cr":[]},{"n":16,"p":[0,5],"a":"N","c":0,"e":0,"m":5,"ev":[],"ca":[],"cr":[]},{"n":17,"p":[0,4],"a":"N","c":1,"e":0,"m":4,"ev":["Found surface nut! (Picked up)"],"ca":[],"cr":[]},{"n":18,"p":[0,3],"a":"E","c":1,"e":0,"m":3,"ev":[],"ca":[],"cr":[]},{"n":19,"p":[0,2],"a":"E","c":1,"e":0,"m":2,"ev":[],"ca":[],"cr":[]},{"n":20,"p":[0,1],"a":"E","c":1,"e":0,"m":1,"ev":[],"ca":[],"cr":[]},{"n":21,"p":[0,0],"a":"E","c":0,"e":0,"m":22,"ev":["Returned safely to burrow!"],"ca":[],"cr":[]}]},{"s":"s","d":26,"nc":95,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":1,"e":0,"m":21,"ev":["Found surface nut! (Picked up)"],"ca":[],"cr":[]},{"n":1,"p":[2,0],"a":"E","c":1,"e":0,"m":20,"ev":[],"ca":[],"cr":[]},{"n":2,"p":[3,0],"a":"E","c":1,"e":0,"m":19,"ev":[],"ca":[],"cr":[]},{"n":3,"p":[4,0],"a":"E","c":1,"e":0,"m":18,"ev":[],"ca":[],"cr":[]},{"n":4,"p":[5,0],"a":"E","c":1,"e":0,"m":17,"ev":[],"ca":[],"cr":[]},{"n":5,"p":[6,0],"a":"E","c":1,"e":0,"m":16,"ev":[],"ca":[],"cr":[]},{"n":6,"p":[6,1],"a":"N","c":1,"e":0,"m":15,"ev":[],"ca":[],"cr":[]},{"n":7,"p":[6,2],"a":"N","c":1,"e":0,"m":14,"ev":[],"ca":[],"cr":[]},{"n":8,"p":[6,3],"a":"N","c":1,"e":0,"m":13,"ev":[],"ca":[],"cr":[]},{"n":9,"p":[6,4],"a":"N","c":0,"e":0,"m":12,"ev":["Buried nut at (6, 4)"],"ca":[[6,4]],"cr":[]},{"n":10,"p":[6,5],"a":"N","c":0,"e":0,"m":11,"ev":[],"ca":[],"cr":[]},{"n":11,"p":[5,5],"a":"N","c":0,"e":0,"m":10,"ev":["Found & buried nut at (5, 5)"],"ca":[[5,5]],"cr":[]},{"n":12,"p":[4,5],"a":"N","c":0,"e":0,"m":9,"ev":[],"ca":[],"cr":[]},{"n":13,"p":[3,5],"a":"N","c":0,"e":0,"m":8,"ev":["Found & buried nut at (3, 5)"],"ca":[[3,5]],"cr":[]},{"n":14,"p":[2,5],"a":"N","c":0,"e":0,"m":7,"ev":[],"ca":[],"cr":[]},{"n":15,"p":[1,5],"a":"N","c":0,"e":0,"m":6,"ev":[],"ca":[],"cr":[]},{"n":16,"p":[0,5],"a":"N","c":1,"e":0,"m":5,"ev":["Found surface nut! (Picked up)"],"ca":[],"cr":[]},{"n":17,"p":[0,4],"a":"E","c":1,"e":0,"m":4,"ev":[],"ca":[],"cr":[]},{"n":18,"p":[0,3],"a":"E","c":1,"e":0,"m":3,"ev":[],"ca":[],"cr":[]},{"n":19,"p":[0,2],"a":"E","c":1,"e":0,"m":2,"ev":[],"ca":[],"cr":[]},{"n":20,"p":[0,1],"a":"E","c":1,"e":0,"m":1,"ev":[],"ca":[],"cr":[]},{"n":21,"p":[0,0],"a":"E","c":0,"e":0,"m":22,"ev":["Returned safely to burrow!"],"ca":[],"cr":[]}]},{"s":"s","d":27,"nc":99,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":[],"ca":[],"cr":[]},{"n":1,"p":[2,0],"a":"E","c":0,"e":0,"m":20,"ev":[],"ca":[],"cr":[]},{"n":2,"p":[2,1],"a":"N","c":1,"e":0,"m":19,"ev":["Found surface nut! (Picked up)"],"ca":[],"cr":[]},{"n":3,"p":[3,1],"a":"E","c":1,"e":0,"m":18,"ev":[],"ca":[],"cr":[]},{"n":4,"p":[4,1],"a":"E","c":1,"e":0,"m":17,"ev":[],"ca":[],"cr":[]},{"n":5,"p":[5,1],"a":"E","c":0,"e":0,"m":16,"ev":["Buried nut at (5, 1)"],"ca":[[5,1]],"cr":[]},{"n":6,"p":[5,2],"a":"N","c":0,"e":0,"m":15,"ev":["Found & buried nut at (5, 2)"],"ca":[[5,2]],"cr":[]},{"n":7,"p":[5,3],"a":"N","c":0,"e":0,"m":14,"ev":["Found & buried nut at (5, 3)"],"ca":[[5,3]],"cr":[]},{"n":8,"p":[5,4],"a":"N","c":0,"e":0,"m":13,"ev":[],"ca":[],"cr":[]},{"n":9,"p":[5,5],"a":"N","c":0,"e":0,"m":12,"ev":[],"ca":[],"cr":[]},{"n":10,"p":[5,6],"a":"N","c":0,"e":0,"m":11,"ev":[],"ca":[],"cr":[]},{"n":11,"p":[4,6],"a":"N","c":0,"e":0,"m":10,"ev":[],"ca":[],"cr":[]},{"n":12,"p":[3,6],"a":"N","c":0,"e":0,"m":9,"ev":[],"ca":[],"cr":[]},{"n":13,"p":[2,6],"a":"N","c":1,"e":0,"m":8,"ev":["Found surface nut! (Picked up)"],"ca":[],"cr":[]},{"n":14,"p":[1,6],"a":"E","c":0,"e":0,"m":7,"ev":["Buried nut at (1, 6)"],"ca":[[1,6]],"cr":[]},{"n":15,"p":[0,6],"a":"N","c":0,"e":0,"m":6,"ev":[],"ca":[],"cr":[]},{"n":16,"p":[0,5],"a":"N","c":0,"e":0,"m":5,"ev":[],"ca":[],"cr":[]},{"n":17,"p":[0,4],"a":"N","c":0,"e":0,"m":4,"ev":[],"ca":[],"cr":[]},{"n":18,"p":[0,3],"a":"N","c":0,"e":0,"m":3,"ev":[],"ca":[],"cr":[]},{"n":19,"p":[0,2],"a":"N","c":0,"e":0,"m":2,"ev":[],"ca":[],"cr":[]},{"n":20,"p":[0,1],"a":"N","c":0,"e":0,"m":1,"ev":[],"ca":[],"cr":[]},{"n":21,"p":[0,0],"a":"N","c":0,"e":0,"m":22,"ev":["Returned safely to burrow!"],"ca":[],"cr":[]}]},{"s":"s","d":28,"nc":100,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":[],"ca":[],"cr":[]},{"n":1,"p":[2,0],"a":"E","c":0,"e":0,"m":20,"ev":[],"ca":[],"cr":[]},{"n":2,"p":[3,0],"a":"E","c":0,"e":0,"m":19,"ev":[],"ca":[],"cr":[]},{"n":3,"p":[3,1],"a":"N","c":0,"e":0,"m":18,"ev":[],"ca":[],"cr":[]},{"n":4,"p":[3,2],"a":"N","c":0,"e":0,"m":17,"ev":[],"ca":[],"cr":[]},{"n":5,"p":[3,3],"a":"N","c":1,"e":0,"m":16,"ev":["Found surface nut! (Picked up)"],"ca":[],"cr":[]},{"n":6,"p":[4,3],"a":"E","c":0,"e":0,"m":15,"ev":["Buried nut at (4, 3)"],"ca":[[4,3]],"cr":[]},{"n":7,"p":[4,4],"a":"N","c":0,"e":0,"m":14,"ev":[],"ca":[],"cr":[]},{"n":8,"p":[4,5],"a":"N","c":0,"e":0,"m":13,"ev":[],"ca":[],"cr":[]},{"n":9,"p":[4,6],"a":"N","c":0,"e":0,"m":12,"ev":[],"ca":[],"cr":[]},{"n":10,"p":[4,7],"a":"N","c":0,"e":0,"m":11,"ev":[],"ca":[],"cr":[]},{"n":11,"p":[3,7],"a":"N","c":0,"e":0,"m":10,"ev":[],"ca":[],"cr":[]},{"n":12,"p":[2,7],"a":"N","c":0,"e":0,"m":9,"ev":[],"ca":[],"cr":[]},{"n":13,"p":[1,7],"a":"N","c":0,"e":0,"m":8,"ev":[],"ca":[],"cr":[]},{"n":14,"p":[0,7],"a":"E","c":1,"e":0,"m":7,"ev":["Found surface nut! (Picked up)"],"ca":[],"cr":[]},{"n":15,"p":[0,6],"a":"E","c":1,"e":0,"m":6,"ev":[],"ca":[],"cr":[]},{"n":16,"p":[0,5],"a":"E","c":1,"e":0,"m":5,"ev":[],"ca":[],"cr":[]},{"n":17,"p":[0,4],"a":"E","c":1,"e":0,"m":4,"ev":[],"ca":[],"cr":[]},{"n":18,"p":[0,3],"a":"E","c":1,"e":0,"m":3,"ev":[],"ca":[],"cr":[]},{"n":19,"p":[0,2],"a":"E","c":1,"e":0,"m":2,"ev":[],"ca":[],"cr":[]},{"n":20,"p":[0,1],"a":"E","c":1,"e":0,"m":1,"ev":[],"ca":[],"cr":[]},{"n":21,"p":[0,0],"a":"E","c":0,"e":0,"m":22,"ev":["Returned safely to burrow!"],"ca":[],"cr":[]}]},{"s":"s","d":29,"nc":102,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":[],"ca":[],"cr":[]},{"n":1,"p":[2,0],"a":"E","c":0,"e":0,"m":20,"ev":[],"ca":[],"cr":[]},{"n":2,"p":[3,0],"a":"E","c":0,"e":0,"m":19,"ev":[],"ca":[],"cr":[]},{"n":3,"p":[3,1],"a":"N","c":0,"e":0,"m":18,"ev":[],"ca":[],"cr":[]},{"n":4,"p":[3,2],"a":"N","c":0,"e":0,"m":17,"ev":[],"ca":[],"cr":[]},{"n":5,"p":[3,3],"a":"N","c":0,"e":0,"m":16,"ev":[],"ca":[],"cr":[]},{"n":6,"p":[3,4],"a":"N","c":0,"e":0,"m":15,"ev":[],"ca":[],"cr":[]},{"n":7,"p":[4,4],"a":"E","c":0,"e":0,"m":14,"ev":[],"ca":[],"cr":[]},{"n":8,"p":[5,4],"a":"E","c":0,"e":0,"m":13,"ev":[],"ca":[],"cr":[]},{"n":9,"p":[5,5],"a":"N","c":1,"e":0,"m":12,"ev":["Found surface nut! (Picked up)"],"ca":[],"cr":[]},{"n":10,"p":[6,5],"a":"E","c":0,"e":0,"m":11,"ev":["Buried nut at (6, 5)"],"ca":[[6,5]],"cr":[]},{"n":11,"p":[5,5],"a":"N","c":0,"e":0,"m":10,"ev":[],"ca":[],"cr":[]},{"n":12,"p":[4,5],"a":"N","c":0,"e":0,"m":9,"ev":[],"ca":[],"cr":[]},{"n":13,"p":[3,5],"a":"N","c":0,"e":0,"m":8,"ev":[],"ca":[],"cr":[]},{"n":14,"p":[2,5],"a":"N","c":0,"e":0,"m":7,"ev":["Found & buried nut at (2, 5)"],"ca":[[2,5]],"cr":[]},{"n":15,"p":[1,5],"a":"N","c":1,"e":0,"m":6,"ev":["Found surface nut! (Picked up)"],"ca":[],"cr":[]},{"n":16,"p":[0,5],"a":"E","c":1,"e":0,"m":5,"ev":[],"ca":[],"cr":[]},{"n":17,"p":[0,4],"a":"E","c":1,"e":0,"m":4,"ev":[],"ca":[],"cr":[]},{"n":18,"p":[0,3],"a":"E","c":1,"e":0,"m":3,"ev":[],"ca":[],"cr":[]},{"n":19,"p":[0,2],"a":"E","c":1,"e":0,"m":2,"ev":[],"ca":[],"cr":[]},{"n":20,"p":[0,1],"a":"E","c":1,"e":0,"m":1,"ev":[],"ca":[],"cr":[]},{"n":21,"p":[0,0],"a":"E","c":0,"e":0,"m":22,"ev":["Returned safely to burrow!"],"ca":[],"cr":[]}]},{"s":"s","d":30,"nc":104,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":[],"ca":[],"cr":[]},{"n":1,"p":[2,0],"a":"E","c":1,"e":0,"m":20,"ev":["Found surface nut! (Picked up)"],"ca":[],"cr":[]},{"n":2,"p":[3,0],"a":"E","c":1,"e":0,"m":19,"ev":[],"ca":[],"cr":[]},{"n":3,"p":[4,0],"a":"E","c":1,"e":0,"m":18,"ev":[],"ca":[],"cr":[]},{"n":4,"p":[5,0],"a":"E","c":1,"e":0,"m":17,"ev":[],"ca":[],"cr":[]},{"n":5,"p":[6,0],"a":"E","c":1,"e":0,"m":16,"ev":[],"ca":[],"cr":[]},{"n":6,"p":[7,0],"a":"E","c":1,"e":0,"m":15,"ev":[],"ca":[],"cr":[]},{"n":7,"p":[8,0],"a":"E","c":1,"e":0,"m":14,"ev":[],"ca":[],"cr":[]},{"n":8,"p":[9,0],"a":"E","c":1,"e":0,"m":13,"ev":[],"ca":[],"cr":[]},{"n":9,"p":[9,1],"a":"N","c":1,"e":0,"m":12,"ev":[],"ca":[],"cr":[]},{"n":10,"p":[9,2],"a":"N","c":0,"e":0,"m":11,"ev":["Buried nut at (9, 2)"],"ca":[[9,2]],"cr":[]},{"n":11,"p":[8,2],"a":"N","c":0,"e":0,"m":10,"ev":["Found & buried nut at (8, 2)"],"ca":[[8,2]],"cr":[]},{"n":12,"p":[7,2],"a":"N","c":0,"e":0,"m":9,"ev":[],"ca":[],"cr":[]},{"n":13,"p":[6,2],"a":"N","c":0,"e":0,"m":8,"ev":[],"ca":[],"cr":[]},{"n":14,"p":[5,2],"a":"N","c":0,"e":0,"m":7,"ev":[],"ca":[],"cr":[]},{"n":15,"p":[4,2],"a":"N","c":0,"e":0,"m":6,"ev":[],"ca":[],"cr":[]},{"n":16,"p":[3,2],"a":"N","c":0,"e":0,"m":5,"ev":[],"ca":[],"cr":[]},{"n":17,"p":[2,2],"a":"N","c":0,"e":0,"m":4,"ev":[],"ca":[],"cr":[]},{"n":18,"p":[1,2],"a":"N","c":0,"e":0,"m":3,"ev":[],"ca":[],"cr":[]},{"n":19,"p":[0,2],"a":"N","c":1,"e":0,"m":2,"ev":["Found surface nut! (Picked up)"],"ca":[],"cr":[]},{"n":20,"p":[0,1],"a":"E","c":1,"e":0,"m":1,"ev":[],"ca":[],"cr":[]},{"n":21,"p":[0,0],"a":"E","c":0,"e":0,"m":22,"ev":["Returned safely to burrow!"],"ca":[],"cr":[]}]},{"s":"w","d":1,"nc":101,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":1,"m":21,"ev":["Dug up & ate cached nut at (1, 0)! (1/3)"],"ca":[],"cr":[[1,0]]},{"n":1,"p":[2,0],"a":"E","c":0,"e":2,"m":20,"ev":["Dug up & ate cached nut at (2, 0)! (2/3)"],"ca":[],"cr":[[2,0]]},{"n":2,"p":[3,0],"a":"E","c":0,"e":3,"m":19,"ev":["Dug up & ate cached nut at (3, 0)! (3/3)"],"ca":[],"cr":[[3,0]]},{"n":3,"p":[2,0],"a":"N","c":0,"e":3,"m":18,"ev":[],"ca":[],"cr":[]},{"n":4,"p":[1,0],"a":"N","c":0,"e":3,"m":17,"ev":[],"ca":[],"cr":[]},{"n":5,"p":[0,0],"a":"E","c":0,"e":3,"m":16,"ev":["Returned safely to burrow (Quota Met)!"],"ca":[],"cr":[]},{"n":6,"p":[0,0],"a":"E","c":0,"e":3,"m":22,"ev":[],"ca":[],"cr":[]}]},{"s":"w","d":2,"nc":98,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":[],"ca":[],"cr":[]},{"n":1,"p":[2,0],"a":"E","c":0,"e":0,"m":20,"ev":[],"ca":[],"cr":[]},{"n":2,"p":[3,0],"a":"E","c":0,"e":0,"m":19,"ev":[],"ca":[],"cr":[]},{"n":3,"p":[4,0],"a":"E","c":0,"e":1,"m":18,"ev":["Dug up & ate cached nut at (4, 0)! (1/3)"],"ca":[],"cr":[[4,0]]},{"n":4,"p":[5,0],"a":"E","c":0,"e":2,"m":17,"ev":["Dug up & ate cached nut at (5, 0)! (2/3)"],"ca":[],"cr":[[5,0]]},{"n":5,"p":[5,1],"a":"N","c":0,"e":3,"m":16,"ev":["Dug up & ate cached nut at (5, 1)! (3/3)"],"ca":[],"cr":[[5,1]]},{"n":6,"p":[4,1],"a":"N","c":0,"e":3,"m":15,"ev":[],"ca":[],"cr":[]},{"n":7,"p":[3,1],"a":"N","c":0,"e":3,"m":14,"ev":[],"ca":[],"cr":[]},{"n":8,"p":[2,1],"a":"N","c":0,"e":3,"m":13,"ev":[],"ca":[],"cr":[]},{"n":9,"p":[1,1],"a":"N","c":0,"e":3,"m":12,"ev":[],"ca":[],"cr":[]},{"n":10,"p":[0,1],"a":"N","c":0,"e":3,"m":11,"ev":[],"ca":[],"cr":[]},{"n":11,"p":[0,0],"a":"N","c":0,"e":3,"m":10,"ev":["Returned safely to burrow (Quota Met)!"],"ca":[],"cr":[]},{"n":12,"p":[0,0],"a":"E","c":0,"e":3,"m":22,"ev":[],"ca":[],"cr":[]}]},{"s":"w","d":3,"nc":95,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":[],"ca":[],"cr":[]},{"n":1,"p":[2,0],"a":"E","c":0,"e":0,"m":20,"ev":[],"ca":[],"cr":[]},{"n":2,"p":[3,0],"a":"E","c":0,"e":0,"m":19,"ev":[],"ca":[],"cr":[]},{"n":3,"p":[4,0],"a":"E","c":0,"e":0,"m":18,"ev":[],"ca":[],"cr":[]},{"n":4,"p":[5,0],"a":"E","c":0,"e":0,"m":17,"ev":[],"ca":[],"cr":[]},{"n":5,"p":[6,0],"a":"E","c":0,"e":1,"m":16,"ev":["Dug up & ate cached nut at (6, 0)! (1/3)"],"ca":[],"cr":[[6,0]]},{"n":6,"p":[7,0],"a":"E","c":0,"e":2,"m":15,"ev":["Dug up & ate cached nut at (7, 0)! (2/3)"],"ca":[],"cr":[[7,0]]},{"n":7,"p":[7,1],"a":"N","c":0,"e":2,"m":14,"ev":[],"ca":[],"cr":[]},{"n":8,"p":[7,2],"a":"N","c":0,"e":3,"m":13,"ev":["Dug up & ate cached nut at (7, 2)! (3/3)"],"ca":[],"cr":[[7,2]]},{"n":9,"p":[6,2],"a":"N","c":0,"e":3,"m":12,"ev":[],"ca":[],"cr":[]},{"n":10,"p":[5,2],"a":"N","c":0,"e":3,"m":11,"ev":[],"ca":[],"cr":[]},{"n":11,"p":[4,2],"a":"N","c":0,"e":3,"m":10,"ev":[],"ca":[],"cr":[]},{"n":12,"p":[3,2],"a":"N","c":0,"e":3,"m":9,"ev":[],"ca":[],"cr":[]},{"n":13,"p":[2,2],"a":"N","c":0,"e":3,"m":8,"ev":[],"ca":[],"cr":[]},{"n":14,"p":[1,2],"a":"N","c":0,"e":3,"m":7,"ev":[],"ca":[],"cr":[]},{"n":15,"p":[0,2],"a":"N","c":0,"e":3,"m":6,"ev":[],"ca":[],"cr":[]},{"n":16,"p":[0,1],"a":"N","c":0,"e":3,"m":5,"ev":[],"ca":[],"cr":[]},{"n":17,"p":[0,0],"a":"N","c":0,"e":3,"m":4,"ev":["Returned safely to burrow (Quota Met)!"],"ca":[],"cr":[]},{"n":18,"p":[0,0],"a":"E","c":0,"e":3,"m":22,"ev":[],"ca":[],"cr":[]}]},{"s":"w","d":4,"nc":92,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":[],"ca":[],"cr":[]},{"n":1,"p":[2,0],"a":"E","c":0,"e":0,"m":20,"ev":[],"ca":[],"cr":[]},{"n":2,"p":[3,0],"a":"E","c":0,"e":0,"m":19,"ev":[],"ca":[],"cr":[]},{"n":3,"p":[4,0],"a":"E","c":0,"e":0,"m":18,"ev":[],"ca":[],"cr":[]},{"n":4,"p":[5,0],"a":"E","c":0,"e":0,"m":17,"ev":[],"ca":[],"cr":[]},{"n":5,"p":[6,0],"a":"E","c":0,"e":0,"m":16,"ev":[],"ca":[],"cr":[]},{"n":6,"p":[7,0],"a":"E","c":0,"e":0,"m":15,"ev":[],"ca":[],"cr":[]},{"n":7,"p":[8,0],"a":"E","c":0,"e":1,"m":14,"ev":["Dug up & ate cached nut at (8, 0)! (1/3)"],"ca":[],"cr":[[8,0]]},{"n":8,"p":[8,1],"a":"N","c":0,"e":1,"m":13,"ev":[],"ca":[],"cr":[]},{"n":9,"p":[8,2],"a":"N","c":0,"e":2,"m":12,"ev":["Dug up & ate cached nut at (8, 2)! (2/3)"],"ca":[],"cr":[[8,2]]},{"n":10,"p":[8,3],"a":"N","c":0,"e":3,"m":11,"ev":["Dug up & ate cached nut at (8, 3)! (3/3)"],"ca":[],"cr":[[8,3]]},{"n":11,"p":[7,3],"a":"N","c":0,"e":3,"m":10,"ev":[],"ca":[],"cr":[]},{"n":12,"p":[6,3],"a":"N","c":0,"e":3,"m":9,"ev":[],"ca":[],"cr":[]},{"n":13,"p":[5,3],"a":"N","c":0,"e":3,"m":8,"ev":[],"ca":[],"cr":[]},{"n":14,"p":[4,3],"a":"N","c":0,"e":3,"m":7,"ev":[],"ca":[],"cr":[]},{"n":15,"p":[3,3],"a":"N","c":0,"e":3,"m":6,"ev":[],"ca":[],"cr":[]},{"n":16,"p":[2,3],"a":"N","c":0,"e":3,"m":5,"ev":[],"ca":[],"cr":[]},{"n":17,"p":[1,3],"a":"N","c":0,"e":3,"m":4,"ev":[],"ca":[],"cr":[]},{"n":18,"p":[0,3],"a":"N","c":0,"e":3,"m":3,"ev":[],"ca":[],"cr":[]},{"n":19,"p":[0,2],"a":"N","c":0,"e":3,"m":2,"ev":[],"ca":[],"cr":[]},{"n":20,"p":[0,1],"a":"N","c":0,"e":3,"m":1,"ev":[],"ca":[],"cr":[]},{"n":21,"p":[0,0],"a":"N","c":0,"e":3,"m":22,"ev":["Returned safely to burrow (Quota Met)!"],"ca":[],"cr":[]}]},{"s":"w","d":5,"nc":89,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":[],"ca":[],"cr":[]},{"n":1,"p":[2,0],"a":"E","c":0,"e":0,"m":20,"ev":[],"ca":[],"cr":[]},{"n":2,"p":[3,0],"a":"E","c":0,"e":0,"m":19,"ev":[],"ca":[],"cr":[]},{"n":3,"p":[4,0],"a":"E","c":0,"e":0,"m":18,"ev":[],"ca":[],"cr":[]},{"n":4,"p":[5,0],"a":"E","c":0,"e":0,"m":17,"ev":[],"ca":[],"cr":[]},{"n":5,"p":[6,0],"a":"E","c":0,"e":0,"m":16,"ev":[],"ca":[],"cr":[]},{"n":6,"p":[7,0],"a":"E","c":0,"e":0,"m":15,"ev":[],"ca":[],"cr":[]},{"n":7,"p":[8,0],"a":"E","c":0,"e":0,"m":14,"ev":[],"ca":[],"cr":[]},{"n":8,"p":[9,0],"a":"E","c":0,"e":1,"m":13,"ev":["Dug up & ate cached nut at (9, 0)! (1/3)"],"ca":[],"cr":[[9,0]]},{"n":9,"p":[9,-1],"a":"S","c":0,"e":2,"m":12,"ev":["Dug up & ate cached nut at (9, -1)! (2/3)"],"ca":[],"cr":[[9,-1]]},{"n":10,"p":[9,-2],"a":"S","c":0,"e":3,"m":11,"ev":["Dug up & ate cached nut at (9, -2)! (3/3)"],"ca":[],"cr":[[9,-2]]},{"n":11,"p":[8,-2],"a":"S","c":0,"e":3,"m":10,"ev":[],"ca":[],"cr":[]},{"n":12,"p":[7,-2],"a":"S","c":0,"e":3,"m":9,"ev":[],"ca":[],"cr":[]},{"n":13,"p":[6,-2],"a":"S","c":0,"e":3,"m":8,"ev":[],"ca":[],"cr":[]},{"n":14,"p":[5,-2],"a":"S","c":0,"e":3,"m":7,"ev":[],"ca":[],"cr":[]},{"n":15,"p":[4,-2],"a":"S","c":0,"e":3,"m":6,"ev":[],"ca":[],"cr":[]},{"n":16,"p":[3,-2],"a":"S","c":0,"e":3,"m":5,"ev":[],"ca":[],"cr":[]},{"n":17,"p":[2,-2],"a":"S","c":0,"e":3,"m":4,"ev":[],"ca":[],"cr":[]},{"n":18,"p":[1,-2],"a":"N","c":0,"e":3,"m":3,"ev":[],"ca":[],"cr":[]},{"n":19,"p":[0,-2],"a":"N","c":0,"e":3,"m":2,"ev":[],"ca":[],"cr":[]},{"n":20,"p":[0,-1],"a":"N","c":0,"e":3,"m":1,"ev":[],"ca":[],"cr":[]},{"n":21,"p":[0,0],"a":"N","c":0,"e":3,"m":22,"ev":["Returned safely to burrow (Quota Met)!"],"ca":[],"cr":[]}]},{"s":"w","d":6,"nc":86,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":[],"ca":[],"cr":[]},{"n":1,"p":[2,0],"a":"E","c":0,"e":0,"m":20,"ev":[],"ca":[],"cr":[]},{"n":2,"p":[3,0],"a":"E","c":0,"e":0,"m":19,"ev":[],"ca":[],"cr":[]},{"n":3,"p":[4,0],"a":"E","c":0,"e":0,"m":18,"ev":[],"ca":[],"cr":[]},{"n":4,"p":[5,0],"a":"E","c":0,"e":0,"m":17,"ev":[],"ca":[],"cr":[]},{"n":5,"p":[6,0],"a":"E","c":0,"e":0,"m":16,"ev":[],"ca":[],"cr":[]},{"n":6,"p":[7,0],"a":"E","c":0,"e":0,"m":15,"ev":[],"ca":[],"cr":[]},{"n":7,"p":[8,0],"a":"E","c":0,"e":0,"m":14,"ev":[],"ca":[],"cr":[]},{"n":8,"p":[9,0],"a":"E","c":0,"e":0,"m":13,"ev":[],"ca":[],"cr":[]},{"n":9,"p":[9,-1],"a":"S","c":0,"e":0,"m":12,"ev":[],"ca":[],"cr":[]},{"n":10,"p":[9,-2],"a":"S","c":0,"e":0,"m":11,"ev":[],"ca":[],"cr":[]},{"n":11,"p":[8,-2],"a":"S","c":0,"e":0,"m":10,"ev":[],"ca":[],"cr":[]},{"n":12,"p":[7,-2],"a":"S","c":0,"e":1,"m":9,"ev":["Dug up & ate cached nut at (7, -2)! (1/3)"],"ca":[],"cr":[[7,-2]]},{"n":13,"p":[6,-2],"a":"S","c":0,"e":2,"m":8,"ev":["Dug up & ate cached nut at (6, -2)! (2/3)"],"ca":[],"cr":[[6,-2]]},{"n":14,"p":[5,-2],"a":"S","c":0,"e":3,"m":7,"ev":["Dug up & ate cached nut at (5, -2)! (3/3)"],"ca":[],"cr":[[5,-2]]},{"n":15,"p":[4,-2],"a":"S","c":0,"e":3,"m":6,"ev":[],"ca":[],"cr":[]},{"n":16,"p":[3,-2],"a":"S","c":0,"e":3,"m":5,"ev":[],"ca":[],"cr":[]},{"n":17,"p":[2,-2],"a":"S","c":0,"e":3,"m":4,"ev":[],"ca":[],"cr":[]},{"n":18,"p":[1,-2],"a":"S","c":0,"e":3,"m":3,"ev":[],"ca":[],"cr":[]},{"n":19,"p":[0,-2],"a":"S","c":0,"e":3,"m":2,"ev":[],"ca":[],"cr":[]},{"n":20,"p":[0,-1],"a":"S","c":0,"e":3,"m":1,"ev":[],"ca":[],"cr":[]},{"n":21,"p":[0,0],"a":"S","c":0,"e":3,"m":22,"ev":["Returned safely to burrow (Quota Met)!"],"ca":[],"cr":[]}]},{"s":"w","d":7,"nc":83,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":[],"ca":[],"cr":[]},{"n":1,"p":[2,0],"a":"E","c":0,"e":0,"m":20,"ev":[],"ca":[],"cr":[]},{"n":2,"p":[3,0],"a":"E","c":0,"e":0,"m":19,"ev":[],"ca":[],"cr":[]},{"n":3,"p":[4,0],"a":"E","c":0,"e":0,"m":18,"ev":[],"ca":[],"cr":[]},{"n":4,"p":[5,0],"a":"E","c":0,"e":0,"m":17,"ev":[],"ca":[],"cr":[]},{"n":5,"p":[6,0],"a":"E","c":0,"e":0,"m":16,"ev":[],"ca":[],"cr":[]},{"n":6,"p":[7,0],"a":"E","c":0,"e":0,"m":15,"ev":[],"ca":[],"cr":[]},{"n":7,"p":[8,0],"a":"E","c":0,"e":0,"m":14,"ev":[],"ca":[],"cr":[]},{"n":8,"p":[8,-1],"a":"S","c":0,"e":1,"m":13,"ev":["Dug up & ate cached nut at (8, -1)! (1/3)"],"ca":[],"cr":[[8,-1]]},{"n":9,"p":[8,-2],"a":"S","c":0,"e":1,"m":12,"ev":[],"ca":[],"cr":[]},{"n":10,"p":[8,-3],"a":"S","c":0,"e":1,"m":11,"ev":[],"ca":[],"cr":[]},{"n":11,"p":[7,-3],"a":"S","c":0,"e":1,"m":10,"ev":[],"ca":[],"cr":[]},{"n":12,"p":[6,-3],"a":"S","c":0,"e":1,"m":9,"ev":[],"ca":[],"cr":[]},{"n":13,"p":[5,-3],"a":"S","c":0,"e":1,"m":8,"ev":[],"ca":[],"cr":[]},{"n":14,"p":[4,-3],"a":"S","c":0,"e":2,"m":7,"ev":["Dug up & ate cached nut at (4, -3)! (2/3)"],"ca":[],"cr":[[4,-3]]},{"n":15,"p":[3,-3],"a":"S","c":0,"e":3,"m":6,"ev":["Dug up & ate cached nut at (3, -3)! (3/3)"],"ca":[],"cr":[[3,-3]]},{"n":16,"p":[2,-3],"a":"S","c":0,"e":3,"m":5,"ev":[],"ca":[],"cr":[]},{"n":17,"p":[1,-3],"a":"S","c":0,"e":3,"m":4,"ev":[],"ca":[],"cr":[]},{"n":18,"p":[0,-3],"a":"S","c":0,"e":3,"m":3,"ev":[],"ca":[],"cr":[]},{"n":19,"p":[0,-2],"a":"S","c":0,"e":3,"m":2,"ev":[],"ca":[],"cr":[]},{"n":20,"p":[0,-1],"a":"S","c":0,"e":3,"m":1,"ev":[],"ca":[],"cr":[]},{"n":21,"p":[0,0],"a":"S","c":0,"e":3,"m":22,"ev":["Returned safely to burrow (Quota Met)!"],"ca":[],"cr":[]}]},{"s":"w","d":8,"nc":80,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":[],"ca":[],"cr":[]},{"n":1,"p":[2,0],"a":"E","c":0,"e":0,"m":20,"ev":[],"ca":[],"cr":[]},{"n":2,"p":[3,0],"a":"E","c":0,"e":0,"m":19,"ev":[],"ca":[],"cr":[]},{"n":3,"p":[4,0],"a":"E","c":0,"e":0,"m":18,"ev":[],"ca":[],"cr":[]},{"n":4,"p":[5,0],"a":"E","c":0,"e":0,"m":17,"ev":[],"ca":[],"cr":[]},{"n":5,"p":[6,0],"a":"E","c":0,"e":0,"m":16,"ev":[],"ca":[],"cr":[]},{"n":6,"p":[7,0],"a":"E","c":0,"e":0,"m":15,"ev":[],"ca":[],"cr":[]},{"n":7,"p":[8,0],"a":"E","c":0,"e":0,"m":14,"ev":[],"ca":[],"cr":[]},{"n":8,"p":[8,-1],"a":"S","c":0,"e":0,"m":13,"ev":[],"ca":[],"cr":[]},{"n":9,"p":[8,-2],"a":"S","c":0,"e":0,"m":12,"ev":[],"ca":[],"cr":[]},{"n":10,"p":[8,-3],"a":"S","c":0,"e":0,"m":11,"ev":[],"ca":[],"cr":[]},{"n":11,"p":[7,-3],"a":"S","c":0,"e":0,"m":10,"ev":[],"ca":[],"cr":[]},{"n":12,"p":[6,-3],"a":"S","c":0,"e":0,"m":9,"ev":[],"ca":[],"cr":[]},{"n":13,"p":[5,-3],"a":"S","c":0,"e":0,"m":8,"ev":[],"ca":[],"cr":[]},{"n":14,"p":[4,-3],"a":"E","c":0,"e":0,"m":7,"ev":[],"ca":[],"cr":[]},{"n":15,"p":[3,-3],"a":"E","c":0,"e":0,"m":6,"ev":[],"ca":[],"cr":[]},{"n":16,"p":[2,-3],"a":"E","c":0,"e":1,"m":5,"ev":["Dug up & ate cached nut at (2, -3)! (1/3)"],"ca":[],"cr":[[2,-3]]},{"n":17,"p":[1,-3],"a":"E","c":0,"e":2,"m":4,"ev":["Dug up & ate cached nut at (1, -3)! (2/3)"],"ca":[],"cr":[[1,-3]]},{"n":18,"p":[0,-3],"a":"E","c":0,"e":3,"m":3,"ev":["Dug up & ate cached nut at (0, -3)! (3/3)"],"ca":[],"cr":[[0,-3]]},{"n":19,"p":[0,-2],"a":"E","c":0,"e":3,"m":2,"ev":[],"ca":[],"cr":[]},{"n":20,"p":[0,-1],"a":"S","c":0,"e":3,"m":1,"ev":[],"ca":[],"cr":[]},{"n":21,"p":[0,0],"a":"S","c":0,"e":3,"m":22,"ev":["Returned safely to burrow (Quota Met)!"],"ca":[],"cr":[]}]},{"s":"w","d":9,"nc":77,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":[],"ca":[],"cr":[]},{"n":1,"p":[2,0],"a":"E","c":0,"e":0,"m":20,"ev":[],"ca":[],"cr":[]},{"n":2,"p":[3,0],"a":"E","c":0,"e":0,"m":19,"ev":[],"ca":[],"cr":[]},{"n":3,"p":[4,0],"a":"E","c":0,"e":0,"m":18,"ev":[],"ca":[],"cr":[]},{"n":4,"p":[5,0],"a":"E","c":0,"e":0,"m":17,"ev":[],"ca":[],"cr":[]},{"n":5,"p":[6,0],"a":"E","c":0,"e":0,"m":16,"ev":[],"ca":[],"cr":[]},{"n":6,"p":[7,0],"a":"E","c":0,"e":0,"m":15,"ev":[],"ca":[],"cr":[]},{"n":7,"p":[7,-1],"a":"S","c":0,"e":1,"m":14,"ev":["Dug up & ate cached nut at (7, -1)! (1/3)"],"ca":[],"cr":[[7,-1]]},{"n":8,"p":[7,-2],"a":"S","c":0,"e":1,"m":13,"ev":[],"ca":[],"cr":[]},{"n":9,"p":[7,-3],"a":"S","c":0,"e":1,"m":12,"ev":[],"ca":[],"cr":[]},{"n":10,"p":[7,-4],"a":"S","c":0,"e":1,"m":11,"ev":[],"ca":[],"cr":[]},{"n":11,"p":[6,-4],"a":"S","c":0,"e":1,"m":10,"ev":[],"ca":[],"cr":[]},{"n":12,"p":[5,-4],"a":"S","c":0,"e":1,"m":9,"ev":[],"ca":[],"cr":[]},{"n":13,"p":[4,-4],"a":"S","c":0,"e":2,"m":8,"ev":["Dug up & ate cached nut at (4, -4)! (2/3)"],"ca":[],"cr":[[4,-4]]},{"n":14,"p":[3,-4],"a":"S","c":0,"e":3,"m":7,"ev":["Dug up & ate cached nut at (3, -4)! (3/3)"],"ca":[],"cr":[[3,-4]]},{"n":15,"p":[2,-4],"a":"S","c":0,"e":3,"m":6,"ev":[],"ca":[],"cr":[]},{"n":16,"p":[1,-4],"a":"S","c":0,"e":3,"m":5,"ev":[],"ca":[],"cr":[]},{"n":17,"p":[0,-4],"a":"S","c":0,"e":3,"m":4,"ev":[],"ca":[],"cr":[]},{"n":18,"p":[0,-3],"a":"S","c":0,"e":3,"m":3,"ev":[],"ca":[],"cr":[]},{"n":19,"p":[0,-2],"a":"S","c":0,"e":3,"m":2,"ev":[],"ca":[],"cr":[]},{"n":20,"p":[0,-1],"a":"S","c":0,"e":3,"m":1,"ev":[],"ca":[],"cr":[]},{"n":21,"p":[0,0],"a":"S","c":0,"e":3,"m":22,"ev":["Returned safely to burrow (Quota Met)!"],"ca":[],"cr":[]}]},{"s":"w","d":10,"nc":74,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":[],"ca":[],"cr":[]},{"n":1,"p":[2,0],"a":"E","c":0,"e":0,"m":20,"ev":[],"ca":[],"cr":[]},{"n":2,"p":[3,0],"a":"E","c":0,"e":0,"m":19,"ev":[],"ca":[],"cr":[]},{"n":3,"p":[4,0],"a":"E","c":0,"e":0,"m":18,"ev":[],"ca":[],"cr":[]},{"n":4,"p":[5,0],"a":"E","c":0,"e":0,"m":17,"ev":[],"ca":[],"cr":[]},{"n":5,"p":[6,0],"a":"E","c":0,"e":0,"m":16,"ev":[],"ca":[],"cr":[]},{"n":6,"p":[6,-1],"a":"S","c":0,"e":0,"m":15,"ev":[],"ca":[],"cr":[]},{"n":7,"p":[6,-2],"a":"S","c":0,"e":0,"m":14,"ev":[],"ca":[],"cr":[]},{"n":8,"p":[6,-3],"a":"S","c":0,"e":0,"m":13,"ev":[],"ca":[],"cr":[]},{"n":9,"p":[6,-4],"a":"S","c":0,"e":0,"m":12,"ev":[],"ca":[],"cr":[]},{"n":10,"p":[6,-5],"a":"S","c":0,"e":0,"m":11,"ev":[],"ca":[],"cr":[]},{"n":11,"p":[5,-5],"a":"S","c":0,"e":0,"m":10,"ev":[],"ca":[],"cr":[]},{"n":12,"p":[4,-5],"a":"S","c":0,"e":0,"m":9,"ev":[],"ca":[],"cr":[]},{"n":13,"p":[3,-5],"a":"S","c":0,"e":1,"m":8,"ev":["Dug up & ate cached nut at (3, -5)! (1/3)"],"ca":[],"cr":[[3,-5]]},{"n":14,"p":[2,-5],"a":"S","c":0,"e":2,"m":7,"ev":["Dug up & ate cached nut at (2, -5)! (2/3)"],"ca":[],"cr":[[2,-5]]},{"n":15,"p":[1,-5],"a":"S","c":0,"e":2,"m":6,"ev":[],"ca":[],"cr":[]},{"n":16,"p":[0,-5],"a":"S","c":0,"e":3,"m":5,"ev":["Dug up & ate cached nut at (0, -5)! (3/3)"],"ca":[],"cr":[[0,-5]]},{"n":17,"p":[0,-4],"a":"S","c":0,"e":3,"m":4,"ev":[],"ca":[],"cr":[]},{"n":18,"p":[0,-3],"a":"S","c":0,"e":3,"m":3,"ev":[],"ca":[],"cr":[]},{"n":19,"p":[0,-2],"a":"S","c":0,"e":3,"m":2,"ev":[],"ca":[],"cr":[]},{"n":20,"p":[0,-1],"a":"S","c":0,"e":3,"m":1,"ev":[],"ca":[],"cr":[]},{"n":21,"p":[0,0],"a":"S","c":0,"e":3,"m":22,"ev":["Returned safely to burrow (Quota Met)!"],"ca":[],"cr":[]}]},{"s":"w","d":11,"nc":71,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":[],"ca":[],"cr":[]},{"n":1,"p":[2,0],"a":"E","c":0,"e":0,"m":20,"ev":[],"ca":[],"cr":[]},{"n":2,"p":[3,0],"a":"E","c":0,"e":0,"m":19,"ev":[],"ca":[],"cr":[]},{"n":3,"p":[4,0],"a":"E","c":0,"e":0,"m":18,"ev":[],"ca":[],"cr":[]},{"n":4,"p":[5,0],"a":"E","c":0,"e":0,"m":17,"ev":[],"ca":[],"cr":[]},{"n":5,"p":[5,-1],"a":"S","c":0,"e":1,"m":16,"ev":["Dug up & ate cached nut at (5, -1)! (1/3)"],"ca":[],"cr":[[5,-1]]},{"n":6,"p":[5,-2],"a":"S","c":0,"e":1,"m":15,"ev":[],"ca":[],"cr":[]},{"n":7,"p":[5,-3],"a":"S","c":0,"e":1,"m":14,"ev":[],"ca":[],"cr":[]},{"n":8,"p":[5,-4],"a":"S","c":0,"e":1,"m":13,"ev":[],"ca":[],"cr":[]},{"n":9,"p":[5,-5],"a":"S","c":0,"e":1,"m":12,"ev":[],"ca":[],"cr":[]},{"n":10,"p":[5,-6],"a":"S","c":0,"e":1,"m":11,"ev":[],"ca":[],"cr":[]},{"n":11,"p":[4,-6],"a":"S","c":0,"e":2,"m":10,"ev":["Dug up & ate cached nut at (4, -6)! (2/3)"],"ca":[],"cr":[[4,-6]]},{"n":12,"p":[3,-6],"a":"S","c":0,"e":3,"m":9,"ev":["Dug up & ate cached nut at (3, -6)! (3/3)"],"ca":[],"cr":[[3,-6]]},{"n":13,"p":[2,-6],"a":"S","c":0,"e":3,"m":8,"ev":[],"ca":[],"cr":[]},{"n":14,"p":[1,-6],"a":"S","c":0,"e":3,"m":7,"ev":[],"ca":[],"cr":[]},{"n":15,"p":[0,-6],"a":"S","c":0,"e":3,"m":6,"ev":[],"ca":[],"cr":[]},{"n":16,"p":[0,-5],"a":"S","c":0,"e":3,"m":5,"ev":[],"ca":[],"cr":[]},{"n":17,"p":[0,-4],"a":"S","c":0,"e":3,"m":4,"ev":[],"ca":[],"cr":[]},{"n":18,"p":[0,-3],"a":"S","c":0,"e":3,"m":3,"ev":[],"ca":[],"cr":[]},{"n":19,"p":[0,-2],"a":"S","c":0,"e":3,"m":2,"ev":[],"ca":[],"cr":[]},{"n":20,"p":[0,-1],"a":"S","c":0,"e":3,"m":1,"ev":[],"ca":[],"cr":[]},{"n":21,"p":[0,0],"a":"S","c":0,"e":3,"m":22,"ev":["Returned safely to burrow (Quota Met)!"],"ca":[],"cr":[]}]},{"s":"w","d":12,"nc":68,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":[],"ca":[],"cr":[]},{"n":1,"p":[2,0],"a":"E","c":0,"e":0,"m":20,"ev":[],"ca":[],"cr":[]},{"n":2,"p":[3,0],"a":"E","c":0,"e":0,"m":19,"ev":[],"ca":[],"cr":[]},{"n":3,"p":[4,0],"a":"E","c":0,"e":0,"m":18,"ev":[],"ca":[],"cr":[]},{"n":4,"p":[4,-1],"a":"S","c":0,"e":1,"m":17,"ev":["Dug up & ate cached nut at (4, -1)! (1/3)"],"ca":[],"cr":[[4,-1]]},{"n":5,"p":[4,-2],"a":"S","c":0,"e":2,"m":16,"ev":["Dug up & ate cached nut at (4, -2)! (2/3)"],"ca":[],"cr":[[4,-2]]},{"n":6,"p":[4,-3],"a":"S","c":0,"e":2,"m":15,"ev":[],"ca":[],"cr":[]},{"n":7,"p":[4,-4],"a":"S","c":0,"e":2,"m":14,"ev":[],"ca":[],"cr":[]},{"n":8,"p":[4,-5],"a":"S","c":0,"e":2,"m":13,"ev":[],"ca":[],"cr":[]},{"n":9,"p":[4,-6],"a":"S","c":0,"e":2,"m":12,"ev":[],"ca":[],"cr":[]},{"n":10,"p":[4,-7],"a":"S","c":0,"e":2,"m":11,"ev":[],"ca":[],"cr":[]},{"n":11,"p":[3,-7],"a":"S","c":0,"e":2,"m":10,"ev":[],"ca":[],"cr":[]},{"n":12,"p":[2,-7],"a":"S","c":0,"e":3,"m":9,"ev":["Dug up & ate cached nut at (2, -7)! (3/3)"],"ca":[],"cr":[[2,-7]]},{"n":13,"p":[1,-7],"a":"S","c":0,"e":3,"m":8,"ev":[],"ca":[],"cr":[]},{"n":14,"p":[0,-7],"a":"S","c":0,"e":3,"m":7,"ev":[],"ca":[],"cr":[]},{"n":15,"p":[0,-6],"a":"S","c":0,"e":3,"m":6,"ev":[],"ca":[],"cr":[]},{"n":16,"p":[0,-5],"a":"S","c":0,"e":3,"m":5,"ev":[],"ca":[],"cr":[]},{"n":17,"p":[0,-4],"a":"S","c":0,"e":3,"m":4,"ev":[],"ca":[],"cr":[]},{"n":18,"p":[0,-3],"a":"S","c":0,"e":3,"m":3,"ev":[],"ca":[],"cr":[]},{"n":19,"p":[0,-2],"a":"S","c":0,"e":3,"m":2,"ev":[],"ca":[],"cr":[]},{"n":20,"p":[0,-1],"a":"S","c":0,"e":3,"m":1,"ev":[],"ca":[],"cr":[]},{"n":21,"p":[0,0],"a":"S","c":0,"e":3,"m":22,"ev":["Returned safely to burrow (Quota Met)!"],"ca":[],"cr":[]}]},{"s":"w","d":13,"nc":65,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":[],"ca":[],"cr":[]},{"n":1,"p":[2,0],"a":"E","c":0,"e":0,"m":20,"ev":[],"ca":[],"cr":[]},{"n":2,"p":[3,0],"a":"E","c":0,"e":0,"m":19,"ev":[],"ca":[],"cr":[]},{"n":3,"p":[3,-1],"a":"S","c":0,"e":1,"m":18,"ev":["Dug up & ate cached nut at (3, -1)! (1/3)"],"ca":[],"cr":[[3,-1]]},{"n":4,"p":[3,-2],"a":"S","c":0,"e":2,"m":17,"ev":["Dug up & ate cached nut at (3, -2)! (2/3)"],"ca":[],"cr":[[3,-2]]},{"n":5,"p":[3,-3],"a":"S","c":0,"e":2,"m":16,"ev":[],"ca":[],"cr":[]},{"n":6,"p":[3,-4],"a":"S","c":0,"e":2,"m":15,"ev":[],"ca":[],"cr":[]},{"n":7,"p":[3,-5],"a":"S","c":0,"e":2,"m":14,"ev":[],"ca":[],"cr":[]},{"n":8,"p":[3,-6],"a":"S","c":0,"e":2,"m":13,"ev":[],"ca":[],"cr":[]},{"n":9,"p":[3,-7],"a":"S","c":0,"e":2,"m":12,"ev":[],"ca":[],"cr":[]},{"n":10,"p":[3,-8],"a":"S","c":0,"e":3,"m":11,"ev":["Dug up & ate cached nut at (3, -8)! (3/3)"],"ca":[],"cr":[[3,-8]]},{"n":11,"p":[2,-8],"a":"S","c":0,"e":3,"m":10,"ev":[],"ca":[],"cr":[]},{"n":12,"p":[1,-8],"a":"S","c":0,"e":3,"m":9,"ev":[],"ca":[],"cr":[]},{"n":13,"p":[0,-8],"a":"S","c":0,"e":3,"m":8,"ev":[],"ca":[],"cr":[]},{"n":14,"p":[0,-7],"a":"S","c":0,"e":3,"m":7,"ev":[],"ca":[],"cr":[]},{"n":15,"p":[0,-6],"a":"S","c":0,"e":3,"m":6,"ev":[],"ca":[],"cr":[]},{"n":16,"p":[0,-5],"a":"S","c":0,"e":3,"m":5,"ev":[],"ca":[],"cr":[]},{"n":17,"p":[0,-4],"a":"S","c":0,"e":3,"m":4,"ev":[],"ca":[],"cr":[]},{"n":18,"p":[0,-3],"a":"S","c":0,"e":3,"m":3,"ev":[],"ca":[],"cr":[]},{"n":19,"p":[0,-2],"a":"S","c":0,"e":3,"m":2,"ev":[],"ca":[],"cr":[]},{"n":20,"p":[0,-1],"a":"S","c":0,"e":3,"m":1,"ev":[],"ca":[],"cr":[]},{"n":21,"p":[0,0],"a":"S","c":0,"e":3,"m":22,"ev":["Returned safely to burrow (Quota Met)!"],"ca":[],"cr":[]}]},{"s":"w","d":14,"nc":62,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":[],"ca":[],"cr":[]},{"n":1,"p":[2,0],"a":"E","c":0,"e":0,"m":20,"ev":[],"ca":[],"cr":[]},{"n":2,"p":[2,-1],"a":"S","c":0,"e":1,"m":19,"ev":["Dug up & ate cached nut at (2, -1)! (1/3)"],"ca":[],"cr":[[2,-1]]},{"n":3,"p":[2,-2],"a":"S","c":0,"e":2,"m":18,"ev":["Dug up & ate cached nut at (2, -2)! (2/3)"],"ca":[],"cr":[[2,-2]]},{"n":4,"p":[2,-3],"a":"S","c":0,"e":2,"m":17,"ev":[],"ca":[],"cr":[]},{"n":5,"p":[2,-4],"a":"S","c":0,"e":3,"m":16,"ev":["Dug up & ate cached nut at (2, -4)! (3/3)"],"ca":[],"cr":[[2,-4]]},{"n":6,"p":[1,-4],"a":"S","c":0,"e":3,"m":15,"ev":[],"ca":[],"cr":[]},{"n":7,"p":[0,-4],"a":"S","c":0,"e":3,"m":14,"ev":[],"ca":[],"cr":[]},{"n":8,"p":[0,-3],"a":"S","c":0,"e":3,"m":13,"ev":[],"ca":[],"cr":[]},{"n":9,"p":[0,-2],"a":"S","c":0,"e":3,"m":12,"ev":[],"ca":[],"cr":[]},{"n":10,"p":[0,-1],"a":"S","c":0,"e":3,"m":11,"ev":[],"ca":[],"cr":[]},{"n":11,"p":[0,0],"a":"S","c":0,"e":3,"m":10,"ev":["Returned safely to burrow (Quota Met)!"],"ca":[],"cr":[]},{"n":12,"p":[0,0],"a":"S","c":0,"e":3,"m":22,"ev":[],"ca":[],"cr":[]}]},{"s":"w","d":15,"nc":59,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":[],"ca":[],"cr":[]},{"n":1,"p":[1,-1],"a":"S","c":0,"e":1,"m":20,"ev":["Dug up & ate cached nut at (1, -1)! (1/3)"],"ca":[],"cr":[[1,-1]]},{"n":2,"p":[1,-2],"a":"S","c":0,"e":2,"m":19,"ev":["Dug up & ate cached nut at (1, -2)! (2/3)"],"ca":[],"cr":[[1,-2]]},{"n":3,"p":[1,-3],"a":"S","c":0,"e":2,"m":18,"ev":[],"ca":[],"cr":[]},{"n":4,"p":[1,-4],"a":"S","c":0,"e":3,"m":17,"ev":["Dug up & ate cached nut at (1, -4)! (3/3)"],"ca":[],"cr":[[1,-4]]},{"n":5,"p":[0,-4],"a":"S","c":0,"e":3,"m":16,"ev":[],"ca":[],"cr":[]},{"n":6,"p":[0,-3],"a":"S","c":0,"e":3,"m":15,"ev":[],"ca":[],"cr":[]},{"n":7,"p":[0,-2],"a":"S","c":0,"e":3,"m":14,"ev":[],"ca":[],"cr":[]},{"n":8,"p":[0,-1],"a":"S","c":0,"e":3,"m":13,"ev":[],"ca":[],"cr":[]},{"n":9,"p":[0,0],"a":"S","c":0,"e":3,"m":12,"ev":["Returned safely to burrow (Quota Met)!"],"ca":[],"cr":[]},{"n":10,"p":[0,0],"a":"S","c":0,"e":3,"m":22,"ev":[],"ca":[],"cr":[]}]},{"s":"w","d":16,"nc":56,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":[],"ca":[],"cr":[]},{"n":1,"p":[1,-1],"a":"S","c":0,"e":0,"m":20,"ev":[],"ca":[],"cr":[]},{"n":2,"p":[1,-2],"a":"S","c":0,"e":0,"m":19,"ev":[],"ca":[],"cr":[]},{"n":3,"p":[1,-3],"a":"S","c":0,"e":0,"m":18,"ev":[],"ca":[],"cr":[]},{"n":4,"p":[1,-4],"a":"S","c":0,"e":0,"m":17,"ev":[],"ca":[],"cr":[]},{"n":5,"p":[1,-5],"a":"S","c":0,"e":0,"m":16,"ev":[],"ca":[],"cr":[]},{"n":6,"p":[1,-6],"a":"S","c":0,"e":1,"m":15,"ev":["Dug up & ate cached nut at (1, -6)! (1/3)"],"ca":[],"cr":[[1,-6]]},{"n":7,"p":[1,-7],"a":"S","c":0,"e":2,"m":14,"ev":["Dug up & ate cached nut at (1, -7)! (2/3)"],"ca":[],"cr":[[1,-7]]},{"n":8,"p":[1,-8],"a":"S","c":0,"e":3,"m":13,"ev":["Dug up & ate cached nut at (1, -8)! (3/3)"],"ca":[],"cr":[[1,-8]]},{"n":9,"p":[0,-8],"a":"S","c":0,"e":3,"m":12,"ev":[],"ca":[],"cr":[]},{"n":10,"p":[0,-7],"a":"S","c":0,"e":3,"m":11,"ev":[],"ca":[],"cr":[]},{"n":11,"p":[0,-6],"a":"S","c":0,"e":3,"m":10,"ev":[],"ca":[],"cr":[]},{"n":12,"p":[0,-5],"a":"S","c":0,"e":3,"m":9,"ev":[],"ca":[],"cr":[]},{"n":13,"p":[0,-4],"a":"S","c":0,"e":3,"m":8,"ev":[],"ca":[],"cr":[]},{"n":14,"p":[0,-3],"a":"S","c":0,"e":3,"m":7,"ev":[],"ca":[],"cr":[]},{"n":15,"p":[0,-2],"a":"S","c":0,"e":3,"m":6,"ev":[],"ca":[],"cr":[]},{"n":16,"p":[0,-1],"a":"S","c":0,"e":3,"m":5,"ev":[],"ca":[],"cr":[]},{"n":17,"p":[0,0],"a":"S","c":0,"e":3,"m":4,"ev":["Returned safely to burrow (Quota Met)!"],"ca":[],"cr":[]},{"n":18,"p":[0,0],"a":"S","c":0,"e":3,"m":22,"ev":[],"ca":[],"cr":[]}]},{"s":"w","d":17,"nc":53,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":[],"ca":[],"cr":[]},{"n":1,"p":[1,-1],"a":"S","c":0,"e":0,"m":20,"ev":[],"ca":[],"cr":[]},{"n":2,"p":[1,-2],"a":"S","c":0,"e":0,"m":19,"ev":[],"ca":[],"cr":[]},{"n":3,"p":[1,-3],"a":"S","c":0,"e":0,"m":18,"ev":[],"ca":[],"cr":[]},{"n":4,"p":[1,-4],"a":"S","c":0,"e":0,"m":17,"ev":[],"ca":[],"cr":[]},{"n":5,"p":[1,-5],"a":"S","c":0,"e":0,"m":16,"ev":[],"ca":[],"cr":[]},{"n":6,"p":[1,-6],"a":"S","c":0,"e":0,"m":15,"ev":[],"ca":[],"cr":[]},{"n":7,"p":[1,-7],"a":"S","c":0,"e":0,"m":14,"ev":[],"ca":[],"cr":[]},{"n":8,"p":[1,-8],"a":"S","c":0,"e":0,"m":13,"ev":[],"ca":[],"cr":[]},{"n":9,"p":[1,-9],"a":"S","c":0,"e":1,"m":12,"ev":["Dug up & ate cached nut at (1, -9)! (1/3)"],"ca":[],"cr":[[1,-9]]},{"n":10,"p":[1,-10],"a":"S","c":0,"e":2,"m":11,"ev":["Dug up & ate cached nut at (1, -10)! (2/3)"],"ca":[],"cr":[[1,-10]]},{"n":11,"p":[0,-10],"a":"S","c":0,"e":3,"m":10,"ev":["Dug up & ate cached nut at (0, -10)! (3/3)"],"ca":[],"cr":[[0,-10]]},{"n":12,"p":[0,-9],"a":"S","c":0,"e":3,"m":9,"ev":[],"ca":[],"cr":[]},{"n":13,"p":[0,-8],"a":"S","c":0,"e":3,"m":8,"ev":[],"ca":[],"cr":[]},{"n":14,"p":[0,-7],"a":"S","c":0,"e":3,"m":7,"ev":[],"ca":[],"cr":[]},{"n":15,"p":[0,-6],"a":"S","c":0,"e":3,"m":6,"ev":[],"ca":[],"cr":[]},{"n":16,"p":[0,-5],"a":"S","c":0,"e":3,"m":5,"ev":[],"ca":[],"cr":[]},{"n":17,"p":[0,-4],"a":"S","c":0,"e":3,"m":4,"ev":[],"ca":[],"cr":[]},{"n":18,"p":[0,-3],"a":"S","c":0,"e":3,"m":3,"ev":[],"ca":[],"cr":[]},{"n":19,"p":[0,-2],"a":"S","c":0,"e":3,"m":2,"ev":[],"ca":[],"cr":[]},{"n":20,"p":[0,-1],"a":"S","c":0,"e":3,"m":1,"ev":[],"ca":[],"cr":[]},{"n":21,"p":[0,0],"a":"S","c":0,"e":3,"m":22,"ev":["Returned safely to burrow (Quota Met)!"],"ca":[],"cr":[]}]},{"s":"w","d":18,"nc":50,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":[],"ca":[],"cr":[]},{"n":1,"p":[1,-1],"a":"S","c":0,"e":0,"m":20,"ev":[],"ca":[],"cr":[]},{"n":2,"p":[1,-2],"a":"S","c":0,"e":0,"m":19,"ev":[],"ca":[],"cr":[]},{"n":3,"p":[1,-3],"a":"S","c":0,"e":0,"m":18,"ev":[],"ca":[],"cr":[]},{"n":4,"p":[1,-4],"a":"S","c":0,"e":0,"m":17,"ev":[],"ca":[],"cr":[]},{"n":5,"p":[1,-5],"a":"S","c":0,"e":0,"m":16,"ev":[],"ca":[],"cr":[]},{"n":6,"p":[1,-6],"a":"S","c":0,"e":0,"m":15,"ev":[],"ca":[],"cr":[]},{"n":7,"p":[1,-7],"a":"S","c":0,"e":0,"m":14,"ev":[],"ca":[],"cr":[]},{"n":8,"p":[1,-8],"a":"S","c":0,"e":0,"m":13,"ev":[],"ca":[],"cr":[]},{"n":9,"p":[1,-9],"a":"S","c":0,"e":0,"m":12,"ev":[],"ca":[],"cr":[]},{"n":10,"p":[1,-10],"a":"S","c":0,"e":0,"m":11,"ev":[],"ca":[],"cr":[]},{"n":11,"p":[0,-10],"a":"S","c":0,"e":0,"m":10,"ev":[],"ca":[],"cr":[]},{"n":12,"p":[0,-9],"a":"S","c":0,"e":1,"m":9,"ev":["Dug up & ate cached nut at (0, -9)! (1/3)"],"ca":[],"cr":[[0,-9]]},{"n":13,"p":[0,-8],"a":"S","c":0,"e":2,"m":8,"ev":["Dug up & ate cached nut at (0, -8)! (2/3)"],"ca":[],"cr":[[0,-8]]},{"n":14,"p":[0,-7],"a":"S","c":0,"e":3,"m":7,"ev":["Dug up & ate cached nut at (0, -7)! (3/3)"],"ca":[],"cr":[[0,-7]]},{"n":15,"p":[0,-6],"a":"S","c":0,"e":3,"m":6,"ev":[],"ca":[],"cr":[]},{"n":16,"p":[0,-5],"a":"S","c":0,"e":3,"m":5,"ev":[],"ca":[],"cr":[]},{"n":17,"p":[0,-4],"a":"S","c":0,"e":3,"m":4,"ev":[],"ca":[],"cr":[]},{"n":18,"p":[0,-3],"a":"S","c":0,"e":3,"m":3,"ev":[],"ca":[],"cr":[]},{"n":19,"p":[0,-2],"a":"S","c":0,"e":3,"m":2,"ev":[],"ca":[],"cr":[]},{"n":20,"p":[0,-1],"a":"S","c":0,"e":3,"m":1,"ev":[],"ca":[],"cr":[]},{"n":21,"p":[0,0],"a":"S","c":0,"e":3,"m":22,"ev":["Returned safely to burrow (Quota Met)!"],"ca":[],"cr":[]}]},{"s":"w","d":19,"nc":47,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":[],"ca":[],"cr":[]},{"n":1,"p":[1,1],"a":"N","c":0,"e":1,"m":20,"ev":["Dug up & ate cached nut at (1, 1)! (1/3)"],"ca":[],"cr":[[1,1]]},{"n":2,"p":[1,2],"a":"N","c":0,"e":2,"m":19,"ev":["Dug up & ate cached nut at (1, 2)! (2/3)"],"ca":[],"cr":[[1,2]]},{"n":3,"p":[1,3],"a":"N","c":0,"e":3,"m":18,"ev":["Dug up & ate cached nut at (1, 3)! (3/3)"],"ca":[],"cr":[[1,3]]},{"n":4,"p":[0,3],"a":"N","c":0,"e":3,"m":17,"ev":[],"ca":[],"cr":[]},{"n":5,"p":[0,2],"a":"N","c":0,"e":3,"m":16,"ev":[],"ca":[],"cr":[]},{"n":6,"p":[0,1],"a":"S","c":0,"e":3,"m":15,"ev":[],"ca":[],"cr":[]},{"n":7,"p":[0,0],"a":"S","c":0,"e":3,"m":14,"ev":["Returned safely to burrow (Quota Met)!"],"ca":[],"cr":[]},{"n":8,"p":[0,0],"a":"N","c":0,"e":3,"m":22,"ev":[],"ca":[],"cr":[]}]},{"s":"w","d":20,"nc":44,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":[],"ca":[],"cr":[]},{"n":1,"p":[1,1],"a":"N","c":0,"e":0,"m":20,"ev":[],"ca":[],"cr":[]},{"n":2,"p":[1,2],"a":"N","c":0,"e":0,"m":19,"ev":[],"ca":[],"cr":[]},{"n":3,"p":[1,3],"a":"N","c":0,"e":0,"m":18,"ev":[],"ca":[],"cr":[]},{"n":4,"p":[1,4],"a":"N","c":0,"e":0,"m":17,"ev":[],"ca":[],"cr":[]},{"n":5,"p":[1,5],"a":"N","c":0,"e":1,"m":16,"ev":["Dug up & ate cached nut at (1, 5)! (1/3)"],"ca":[],"cr":[[1,5]]},{"n":6,"p":[1,6],"a":"N","c":0,"e":2,"m":15,"ev":["Dug up & ate cached nut at (1, 6)! (2/3)"],"ca":[],"cr":[[1,6]]},{"n":7,"p":[1,7],"a":"N","c":0,"e":2,"m":14,"ev":[],"ca":[],"cr":[]},{"n":8,"p":[1,8],"a":"N","c":0,"e":3,"m":13,"ev":["Dug up & ate cached nut at (1, 8)! (3/3)"],"ca":[],"cr":[[1,8]]},{"n":9,"p":[0,8],"a":"N","c":0,"e":3,"m":12,"ev":[],"ca":[],"cr":[]},{"n":10,"p":[0,7],"a":"N","c":0,"e":3,"m":11,"ev":[],"ca":[],"cr":[]},{"n":11,"p":[0,6],"a":"N","c":0,"e":3,"m":10,"ev":[],"ca":[],"cr":[]},{"n":12,"p":[0,5],"a":"N","c":0,"e":3,"m":9,"ev":[],"ca":[],"cr":[]},{"n":13,"p":[0,4],"a":"N","c":0,"e":3,"m":8,"ev":[],"ca":[],"cr":[]},{"n":14,"p":[0,3],"a":"N","c":0,"e":3,"m":7,"ev":[],"ca":[],"cr":[]},{"n":15,"p":[0,2],"a":"N","c":0,"e":3,"m":6,"ev":[],"ca":[],"cr":[]},{"n":16,"p":[0,1],"a":"N","c":0,"e":3,"m":5,"ev":[],"ca":[],"cr":[]},{"n":17,"p":[0,0],"a":"S","c":0,"e":3,"m":4,"ev":["Returned safely to burrow (Quota Met)!"],"ca":[],"cr":[]},{"n":18,"p":[0,0],"a":"N","c":0,"e":3,"m":22,"ev":[],"ca":[],"cr":[]}]},{"s":"w","d":21,"nc":41,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":[],"ca":[],"cr":[]},{"n":1,"p":[1,1],"a":"N","c":0,"e":0,"m":20,"ev":[],"ca":[],"cr":[]},{"n":2,"p":[1,2],"a":"N","c":0,"e":0,"m":19,"ev":[],"ca":[],"cr":[]},{"n":3,"p":[1,3],"a":"N","c":0,"e":0,"m":18,"ev":[],"ca":[],"cr":[]},{"n":4,"p":[1,4],"a":"N","c":0,"e":0,"m":17,"ev":[],"ca":[],"cr":[]},{"n":5,"p":[1,5],"a":"N","c":0,"e":0,"m":16,"ev":[],"ca":[],"cr":[]},{"n":6,"p":[1,6],"a":"N","c":0,"e":0,"m":15,"ev":[],"ca":[],"cr":[]},{"n":7,"p":[1,7],"a":"N","c":0,"e":0,"m":14,"ev":[],"ca":[],"cr":[]},{"n":8,"p":[1,8],"a":"N","c":0,"e":0,"m":13,"ev":[],"ca":[],"cr":[]},{"n":9,"p":[1,9],"a":"N","c":0,"e":0,"m":12,"ev":[],"ca":[],"cr":[]},{"n":10,"p":[1,10],"a":"N","c":0,"e":0,"m":11,"ev":[],"ca":[],"cr":[]},{"n":11,"p":[0,10],"a":"N","c":0,"e":0,"m":10,"ev":[],"ca":[],"cr":[]},{"n":12,"p":[0,9],"a":"N","c":0,"e":1,"m":9,"ev":["Dug up & ate cached nut at (0, 9)! (1/3)"],"ca":[],"cr":[[0,9]]},{"n":13,"p":[0,8],"a":"N","c":0,"e":2,"m":8,"ev":["Dug up & ate cached nut at (0, 8)! (2/3)"],"ca":[],"cr":[[0,8]]},{"n":14,"p":[0,7],"a":"N","c":0,"e":3,"m":7,"ev":["Dug up & ate cached nut at (0, 7)! (3/3)"],"ca":[],"cr":[[0,7]]},{"n":15,"p":[0,6],"a":"N","c":0,"e":3,"m":6,"ev":[],"ca":[],"cr":[]},{"n":16,"p":[0,5],"a":"N","c":0,"e":3,"m":5,"ev":[],"ca":[],"cr":[]},{"n":17,"p":[0,4],"a":"N","c":0,"e":3,"m":4,"ev":[],"ca":[],"cr":[]},{"n":18,"p":[0,3],"a":"N","c":0,"e":3,"m":3,"ev":[],"ca":[],"cr":[]},{"n":19,"p":[0,2],"a":"N","c":0,"e":3,"m":2,"ev":[],"ca":[],"cr":[]},{"n":20,"p":[0,1],"a":"N","c":0,"e":3,"m":1,"ev":[],"ca":[],"cr":[]},{"n":21,"p":[0,0],"a":"N","c":0,"e":3,"m":22,"ev":["Returned safely to burrow (Quota Met)!"],"ca":[],"cr":[]}]},{"s":"w","d":22,"nc":38,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":[],"ca":[],"cr":[]},{"n":1,"p":[1,1],"a":"N","c":0,"e":0,"m":20,"ev":[],"ca":[],"cr":[]},{"n":2,"p":[1,2],"a":"N","c":0,"e":0,"m":19,"ev":[],"ca":[],"cr":[]},{"n":3,"p":[1,3],"a":"N","c":0,"e":0,"m":18,"ev":[],"ca":[],"cr":[]},{"n":4,"p":[1,4],"a":"N","c":0,"e":0,"m":17,"ev":[],"ca":[],"cr":[]},{"n":5,"p":[1,5],"a":"N","c":0,"e":0,"m":16,"ev":[],"ca":[],"cr":[]},{"n":6,"p":[1,6],"a":"N","c":0,"e":0,"m":15,"ev":[],"ca":[],"cr":[]},{"n":7,"p":[1,7],"a":"N","c":0,"e":0,"m":14,"ev":[],"ca":[],"cr":[]},{"n":8,"p":[1,8],"a":"N","c":0,"e":0,"m":13,"ev":[],"ca":[],"cr":[]},{"n":9,"p":[1,9],"a":"N","c":0,"e":0,"m":12,"ev":[],"ca":[],"cr":[]},{"n":10,"p":[1,10],"a":"N","c":0,"e":0,"m":11,"ev":[],"ca":[],"cr":[]},{"n":11,"p":[0,10],"a":"N","c":0,"e":0,"m":10,"ev":[],"ca":[],"cr":[]},{"n":12,"p":[0,9],"a":"N","c":0,"e":0,"m":9,"ev":[],"ca":[],"cr":[]},{"n":13,"p":[0,8],"a":"N","c":0,"e":0,"m":8,"ev":[],"ca":[],"cr":[]},{"n":14,"p":[0,7],"a":"N","c":0,"e":0,"m":7,"ev":[],"ca":[],"cr":[]},{"n":15,"p":[0,6],"a":"N","c":0,"e":1,"m":6,"ev":["Dug up & ate cached nut at (0, 6)! (1/3)"],"ca":[],"cr":[[0,6]]},{"n":16,"p":[0,5],"a":"N","c":0,"e":2,"m":5,"ev":["Dug up & ate cached nut at (0, 5)! (2/3)"],"ca":[],"cr":[[0,5]]},{"n":17,"p":[0,4],"a":"N","c":0,"e":3,"m":4,"ev":["Dug up & ate cached nut at (0, 4)! (3/3)"],"ca":[],"cr":[[0,4]]},{"n":18,"p":[0,3],"a":"N","c":0,"e":3,"m":3,"ev":[],"ca":[],"cr":[]},{"n":19,"p":[0,2],"a":"N","c":0,"e":3,"m":2,"ev":[],"ca":[],"cr":[]},{"n":20,"p":[0,1],"a":"N","c":0,"e":3,"m":1,"ev":[],"ca":[],"cr":[]},{"n":21,"p":[0,0],"a":"N","c":0,"e":3,"m":22,"ev":["Returned safely to burrow (Quota Met)!"],"ca":[],"cr":[]}]},{"s":"w","d":23,"nc":35,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":[],"ca":[],"cr":[]},{"n":1,"p":[2,0],"a":"E","c":0,"e":0,"m":20,"ev":[],"ca":[],"cr":[]},{"n":2,"p":[2,1],"a":"N","c":0,"e":1,"m":19,"ev":["Dug up & ate cached nut at (2, 1)! (1/3)"],"ca":[],"cr":[[2,1]]},{"n":3,"p":[2,2],"a":"N","c":0,"e":2,"m":18,"ev":["Dug up & ate cached nut at (2, 2)! (2/3)"],"ca":[],"cr":[[2,2]]},{"n":4,"p":[2,3],"a":"N","c":0,"e":2,"m":17,"ev":[],"ca":[],"cr":[]},{"n":5,"p":[2,4],"a":"N","c":0,"e":3,"m":16,"ev":["Dug up & ate cached nut at (2, 4)! (3/3)"],"ca":[],"cr":[[2,4]]},{"n":6,"p":[1,4],"a":"N","c":0,"e":3,"m":15,"ev":[],"ca":[],"cr":[]},{"n":7,"p":[0,4],"a":"N","c":0,"e":3,"m":14,"ev":[],"ca":[],"cr":[]},{"n":8,"p":[0,3],"a":"N","c":0,"e":3,"m":13,"ev":[],"ca":[],"cr":[]},{"n":9,"p":[0,2],"a":"N","c":0,"e":3,"m":12,"ev":[],"ca":[],"cr":[]},{"n":10,"p":[0,1],"a":"N","c":0,"e":3,"m":11,"ev":[],"ca":[],"cr":[]},{"n":11,"p":[0,0],"a":"N","c":0,"e":3,"m":10,"ev":["Returned safely to burrow (Quota Met)!"],"ca":[],"cr":[]},{"n":12,"p":[0,0],"a":"N","c":0,"e":3,"m":22,"ev":[],"ca":[],"cr":[]}]},{"s":"w","d":24,"nc":32,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":[],"ca":[],"cr":[]},{"n":1,"p":[2,0],"a":"E","c":0,"e":0,"m":20,"ev":[],"ca":[],"cr":[]},{"n":2,"p":[3,0],"a":"E","c":0,"e":0,"m":19,"ev":[],"ca":[],"cr":[]},{"n":3,"p":[3,1],"a":"N","c":0,"e":1,"m":18,"ev":["Dug up & ate cached nut at (3, 1)! (1/3)"],"ca":[],"cr":[[3,1]]},{"n":4,"p":[3,2],"a":"N","c":0,"e":2,"m":17,"ev":["Dug up & ate cached nut at (3, 2)! (2/3)"],"ca":[],"cr":[[3,2]]},{"n":5,"p":[3,3],"a":"N","c":0,"e":3,"m":16,"ev":["Dug up & ate cached nut at (3, 3)! (3/3)"],"ca":[],"cr":[[3,3]]},{"n":6,"p":[2,3],"a":"N","c":0,"e":3,"m":15,"ev":[],"ca":[],"cr":[]},{"n":7,"p":[1,3],"a":"N","c":0,"e":3,"m":14,"ev":[],"ca":[],"cr":[]},{"n":8,"p":[0,3],"a":"N","c":0,"e":3,"m":13,"ev":[],"ca":[],"cr":[]},{"n":9,"p":[0,2],"a":"N","c":0,"e":3,"m":12,"ev":[],"ca":[],"cr":[]},{"n":10,"p":[0,1],"a":"N","c":0,"e":3,"m":11,"ev":[],"ca":[],"cr":[]},{"n":11,"p":[0,0],"a":"N","c":0,"e":3,"m":10,"ev":["Returned safely to burrow (Quota Met)!"],"ca":[],"cr":[]},{"n":12,"p":[0,0],"a":"N","c":0,"e":3,"m":22,"ev":[],"ca":[],"cr":[]}]},{"s":"w","d":25,"nc":29,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":[],"ca":[],"cr":[]},{"n":1,"p":[2,0],"a":"E","c":0,"e":0,"m":20,"ev":[],"ca":[],"cr":[]},{"n":2,"p":[3,0],"a":"E","c":0,"e":0,"m":19,"ev":[],"ca":[],"cr":[]},{"n":3,"p":[4,0],"a":"E","c":0,"e":0,"m":18,"ev":[],"ca":[],"cr":[]},{"n":4,"p":[4,1],"a":"N","c":0,"e":1,"m":17,"ev":["Dug up & ate cached nut at (4, 1)! (1/3)"],"ca":[],"cr":[[4,1]]},{"n":5,"p":[4,2],"a":"N","c":0,"e":2,"m":16,"ev":["Dug up & ate cached nut at (4, 2)! (2/3)"],"ca":[],"cr":[[4,2]]},{"n":6,"p":[4,3],"a":"N","c":0,"e":3,"m":15,"ev":["Dug up & ate cached nut at (4, 3)! (3/3)"],"ca":[],"cr":[[4,3]]},{"n":7,"p":[3,3],"a":"N","c":0,"e":3,"m":14,"ev":[],"ca":[],"cr":[]},{"n":8,"p":[2,3],"a":"N","c":0,"e":3,"m":13,"ev":[],"ca":[],"cr":[]},{"n":9,"p":[1,3],"a":"N","c":0,"e":3,"m":12,"ev":[],"ca":[],"cr":[]},{"n":10,"p":[0,3],"a":"N","c":0,"e":3,"m":11,"ev":[],"ca":[],"cr":[]},{"n":11,"p":[0,2],"a":"N","c":0,"e":3,"m":10,"ev":[],"ca":[],"cr":[]},{"n":12,"p":[0,1],"a":"N","c":0,"e":3,"m":9,"ev":[],"ca":[],"cr":[]},{"n":13,"p":[0,0],"a":"N","c":0,"e":3,"m":8,"ev":["Returned safely to burrow (Quota Met)!"],"ca":[],"cr":[]},{"n":14,"p":[0,0],"a":"St","c":0,"e":3,"m":22,"ev":[],"ca":[],"cr":[]}]},{"s":"w","d":26,"nc":26,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":[],"ca":[],"cr":[]},{"n":1,"p":[2,0],"a":"E","c":0,"e":0,"m":20,"ev":[],"ca":[],"cr":[]},{"n":2,"p":[3,0],"a":"E","c":0,"e":0,"m":19,"ev":[],"ca":[],"cr":[]},{"n":3,"p":[4,0],"a":"E","c":0,"e":0,"m":18,"ev":[],"ca":[],"cr":[]},{"n":4,"p":[4,1],"a":"N","c":0,"e":0,"m":17,"ev":[],"ca":[],"cr":[]},{"n":5,"p":[4,2],"a":"N","c":0,"e":0,"m":16,"ev":[],"ca":[],"cr":[]},{"n":6,"p":[4,3],"a":"N","c":0,"e":0,"m":15,"ev":[],"ca":[],"cr":[]},{"n":7,"p":[4,4],"a":"N","c":0,"e":0,"m":14,"ev":[],"ca":[],"cr":[]},{"n":8,"p":[4,5],"a":"N","c":0,"e":1,"m":13,"ev":["Dug up & ate cached nut at (4, 5)! (1/3)"],"ca":[],"cr":[[4,5]]},{"n":9,"p":[4,6],"a":"N","c":0,"e":1,"m":12,"ev":[],"ca":[],"cr":[]},{"n":10,"p":[4,7],"a":"N","c":0,"e":2,"m":11,"ev":["Dug up & ate cached nut at (4, 7)! (2/3)"],"ca":[],"cr":[[4,7]]},{"n":11,"p":[3,7],"a":"N","c":0,"e":3,"m":10,"ev":["Dug up & ate cached nut at (3, 7)! (3/3)"],"ca":[],"cr":[[3,7]]},{"n":12,"p":[2,7],"a":"N","c":0,"e":3,"m":9,"ev":[],"ca":[],"cr":[]},{"n":13,"p":[1,7],"a":"N","c":0,"e":3,"m":8,"ev":[],"ca":[],"cr":[]},{"n":14,"p":[0,7],"a":"N","c":0,"e":3,"m":7,"ev":[],"ca":[],"cr":[]},{"n":15,"p":[0,6],"a":"N","c":0,"e":3,"m":6,"ev":[],"ca":[],"cr":[]},{"n":16,"p":[0,5],"a":"N","c":0,"e":3,"m":5,"ev":[],"ca":[],"cr":[]},{"n":17,"p":[0,4],"a":"N","c":0,"e":3,"m":4,"ev":[],"ca":[],"cr":[]},{"n":18,"p":[0,3],"a":"N","c":0,"e":3,"m":3,"ev":[],"ca":[],"cr":[]},{"n":19,"p":[0,2],"a":"N","c":0,"e":3,"m":2,"ev":[],"ca":[],"cr":[]},{"n":20,"p":[0,1],"a":"N","c":0,"e":3,"m":1,"ev":[],"ca":[],"cr":[]},{"n":21,"p":[0,0],"a":"N","c":0,"e":3,"m":22,"ev":["Returned safely to burrow (Quota Met)!"],"ca":[],"cr":[]}]},{"s":"w","d":27,"nc":23,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":[],"ca":[],"cr":[]},{"n":1,"p":[2,0],"a":"E","c":0,"e":0,"m":20,"ev":[],"ca":[],"cr":[]},{"n":2,"p":[3,0],"a":"E","c":0,"e":0,"m":19,"ev":[],"ca":[],"cr":[]},{"n":3,"p":[4,0],"a":"E","c":0,"e":0,"m":18,"ev":[],"ca":[],"cr":[]},{"n":4,"p":[5,0],"a":"E","c":0,"e":0,"m":17,"ev":[],"ca":[],"cr":[]},{"n":5,"p":[5,1],"a":"N","c":0,"e":0,"m":16,"ev":[],"ca":[],"cr":[]},{"n":6,"p":[5,2],"a":"N","c":0,"e":1,"m":15,"ev":["Dug up & ate cached nut at (5, 2)! (1/3)"],"ca":[],"cr":[[5,2]]},{"n":7,"p":[5,3],"a":"N","c":0,"e":2,"m":14,"ev":["Dug up & ate cached nut at (5, 3)! (2/3)"],"ca":[],"cr":[[5,3]]},{"n":8,"p":[5,4],"a":"N","c":0,"e":2,"m":13,"ev":[],"ca":[],"cr":[]},{"n":9,"p":[5,5],"a":"N","c":0,"e":3,"m":12,"ev":["Dug up & ate cached nut at (5, 5)! (3/3)"],"ca":[],"cr":[[5,5]]},{"n":10,"p":[4,5],"a":"N","c":0,"e":3,"m":11,"ev":[],"ca":[],"cr":[]},{"n":11,"p":[3,5],"a":"N","c":0,"e":3,"m":10,"ev":[],"ca":[],"cr":[]},{"n":12,"p":[2,5],"a":"N","c":0,"e":3,"m":9,"ev":[],"ca":[],"cr":[]},{"n":13,"p":[1,5],"a":"N","c":0,"e":3,"m":8,"ev":[],"ca":[],"cr":[]},{"n":14,"p":[0,5],"a":"N","c":0,"e":3,"m":7,"ev":[],"ca":[],"cr":[]},{"n":15,"p":[0,4],"a":"N","c":0,"e":3,"m":6,"ev":[],"ca":[],"cr":[]},{"n":16,"p":[0,3],"a":"N","c":0,"e":3,"m":5,"ev":[],"ca":[],"cr":[]},{"n":17,"p":[0,2],"a":"N","c":0,"e":3,"m":4,"ev":[],"ca":[],"cr":[]},{"n":18,"p":[0,1],"a":"N","c":0,"e":3,"m":3,"ev":[],"ca":[],"cr":[]},{"n":19,"p":[0,0],"a":"N","c":0,"e":3,"m":2,"ev":["Returned safely to burrow (Quota Met)!"],"ca":[],"cr":[]},{"n":20,"p":[0,0],"a":"St","c":0,"e":3,"m":22,"ev":[],"ca":[],"cr":[]}]},{"s":"w","d":28,"nc":20,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":[],"ca":[],"cr":[]},{"n":1,"p":[2,0],"a":"E","c":0,"e":0,"m":20,"ev":[],"ca":[],"cr":[]},{"n":2,"p":[3,0],"a":"E","c":0,"e":0,"m":19,"ev":[],"ca":[],"cr":[]},{"n":3,"p":[4,0],"a":"E","c":0,"e":0,"m":18,"ev":[],"ca":[],"cr":[]},{"n":4,"p":[5,0],"a":"E","c":0,"e":0,"m":17,"ev":[],"ca":[],"cr":[]},{"n":5,"p":[6,0],"a":"E","c":0,"e":0,"m":16,"ev":[],"ca":[],"cr":[]},{"n":6,"p":[6,1],"a":"N","c":0,"e":1,"m":15,"ev":["Dug up & ate cached nut at (6, 1)! (1/3)"],"ca":[],"cr":[[6,1]]},{"n":7,"p":[6,2],"a":"N","c":0,"e":2,"m":14,"ev":["Dug up & ate cached nut at (6, 2)! (2/3)"],"ca":[],"cr":[[6,2]]},{"n":8,"p":[6,3],"a":"N","c":0,"e":3,"m":13,"ev":["Dug up & ate cached nut at (6, 3)! (3/3)"],"ca":[],"cr":[[6,3]]},{"n":9,"p":[5,3],"a":"N","c":0,"e":3,"m":12,"ev":[],"ca":[],"cr":[]},{"n":10,"p":[4,3],"a":"N","c":0,"e":3,"m":11,"ev":[],"ca":[],"cr":[]},{"n":11,"p":[3,3],"a":"N","c":0,"e":3,"m":10,"ev":[],"ca":[],"cr":[]},{"n":12,"p":[2,3],"a":"N","c":0,"e":3,"m":9,"ev":[],"ca":[],"cr":[]},{"n":13,"p":[1,3],"a":"N","c":0,"e":3,"m":8,"ev":[],"ca":[],"cr":[]},{"n":14,"p":[0,3],"a":"N","c":0,"e":3,"m":7,"ev":[],"ca":[],"cr":[]},{"n":15,"p":[0,2],"a":"N","c":0,"e":3,"m":6,"ev":[],"ca":[],"cr":[]},{"n":16,"p":[0,1],"a":"N","c":0,"e":3,"m":5,"ev":[],"ca":[],"cr":[]},{"n":17,"p":[0,0],"a":"N","c":0,"e":3,"m":4,"ev":["Returned safely to burrow (Quota Met)!"],"ca":[],"cr":[]},{"n":18,"p":[0,0],"a":"St","c":0,"e":3,"m":22,"ev":[],"ca":[],"cr":[]}]},{"s":"w","d":29,"nc":17,"ne":0,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":[],"ca":[],"cr":[]},{"n":1,"p":[2,0],"a":"E","c":0,"e":0,"m":20,"ev":[],"ca":[],"cr":[]},{"n":2,"p":[3,0],"a":"E","c":0,"e":0,"m":19,"ev":[],"ca":[],"cr":[]},{"n":3,"p":[4,0],"a":"E","c":0,"e":0,"m":18,"ev":[],"ca":[],"cr":[]},{"n":4,"p":[5,0],"a":"E","c":0,"e":0,"m":17,"ev":[],"ca":[],"cr":[]},{"n":5,"p":[6,0],"a":"E","c":0,"e":0,"m":16,"ev":[],"ca":[],"cr":[]},{"n":6,"p":[6,1],"a":"N","c":0,"e":0,"m":15,"ev":[],"ca":[],"cr":[]},{"n":7,"p":[6,2],"a":"N","c":0,"e":0,"m":14,"ev":[],"ca":[],"cr":[]},{"n":8,"p":[6,3],"a":"N","c":0,"e":0,"m":13,"ev":[],"ca":[],"cr":[]},{"n":9,"p":[6,4],"a":"N","c":0,"e":1,"m":12,"ev":["Dug up & ate cached nut at (6, 4)! (1/3)"],"ca":[],"cr":[[6,4]]},{"n":10,"p":[6,5],"a":"N","c":0,"e":2,"m":11,"ev":["Dug up & ate cached nut at (6, 5)! (2/3)"],"ca":[],"cr":[[6,5]]},{"n":11,"p":[5,5],"a":"N","c":0,"e":2,"m":10,"ev":[],"ca":[],"cr":[]},{"n":12,"p":[4,5],"a":"N","c":0,"e":2,"m":9,"ev":[],"ca":[],"cr":[]},{"n":13,"p":[3,5],"a":"N","c":0,"e":3,"m":8,"ev":["Dug up & ate cached nut at (3, 5)! (3/3)"],"ca":[],"cr":[[3,5]]},{"n":14,"p":[2,5],"a":"N","c":0,"e":3,"m":7,"ev":[],"ca":[],"cr":[]},{"n":15,"p":[1,5],"a":"N","c":0,"e":3,"m":6,"ev":[],"ca":[],"cr":[]},{"n":16,"p":[0,5],"a":"N","c":0,"e":3,"m":5,"ev":[],"ca":[],"cr":[]},{"n":17,"p":[0,4],"a":"N","c":0,"e":3,"m":4,"ev":[],"ca":[],"cr":[]},{"n":18,"p":[0,3],"a":"N","c":0,"e":3,"m":3,"ev":[],"ca":[],"cr":[]},{"n":19,"p":[0,2],"a":"N","c":0,"e":3,"m":2,"ev":[],"ca":[],"cr":[]},{"n":20,"p":[0,1],"a":"N","c":0,"e":3,"m":1,"ev":[],"ca":[],"cr":[]},{"n":21,"p":[0,0],"a":"N","c":0,"e":3,"m":22,"ev":["Returned safely to burrow (Quota Met)!"],"ca":[],"cr":[]}]},{"s":"w","d":30,"nc":14,"ne":3,"st":[{"n":0,"p":[1,0],"a":"E","c":0,"e":0,"m":21,"ev":[],"ca":[],"cr":[]},{"n":1,"p":[2,0],"a":"E","c":0,"e":0,"m":20,"ev":[],"ca":[],"cr":[]},{"n":2,"p":[3,0],"a":"E","c":0,"e":0,"m":19,"ev":[],"ca":[],"cr":[]},{"n":3,"p":[4,0],"a":"E","c":0,"e":0,"m":18,"ev":[],"ca":[],"cr":[]},{"n":4,"p":[5,0],"a":"E","c":0,"e":0,"m":17,"ev":[],"ca":[],"cr":[]},{"n":5,"p":[6,0],"a":"E","c":0,"e":0,"m":16,"ev":[],"ca":[],"cr":[]},{"n":6,"p":[7,0],"a":"E","c":0,"e":0,"m":15,"ev":[],"ca":[],"cr":[]},{"n":7,"p":[7,1],"a":"N","c":0,"e":0,"m":14,"ev":[],"ca":[],"cr":[]},{"n":8,"p":[7,2],"a":"N","c":0,"e":0,"m":13,"ev":[],"ca":[],"cr":[]},{"n":9,"p":[7,3],"a":"N","c":0,"e":0,"m":12,"ev":[],"ca":[],"cr":[]},{"n":10,"p":[7,4],"a":"N","c":0,"e":0,"m":11,"ev":[],"ca":[],"cr":[]},{"n":11,"p":[6,4],"a":"N","c":0,"e":0,"m":10,"ev":[],"ca":[],"cr":[]},{"n":12,"p":[5,4],"a":"N","c":0,"e":0,"m":9,"ev":[],"ca":[],"cr":[]},{"n":13,"p":[4,4],"a":"N","c":0,"e":0,"m":8,"ev":[],"ca":[],"cr":[]},{"n":14,"p":[3,4],"a":"E","c":0,"e":0,"m":7,"ev":[],"ca":[],"cr":[]},{"n":15,"p":[2,4],"a":"E","c":0,"e":0,"m":6,"ev":[],"ca":[],"cr":[]},{"n":16,"p":[1,4],"a":"E","c":0,"e":0,"m":5,"ev":[],"ca":[],"cr":[]},{"n":17,"p":[0,4],"a":"E","c":0,"e":0,"m":4,"ev":[],"ca":[],"cr":[]},{"n":18,"p":[0,3],"a":"E","c":0,"e":1,"m":3,"ev":["Dug up & ate cached nut at (0, 3)! (1/3)"],"ca":[],"cr":[[0,3]]},{"n":19,"p":[0,2],"a":"E","c":0,"e":2,"m":2,"ev":["Dug up & ate cached nut at (0, 2)! (2/3)"],"ca":[],"cr":[[0,2]]},{"n":20,"p":[0,1],"a":"E","c":0,"e":3,"m":1,"ev":["Dug up & ate cached nut at (0, 1)! (3/3)"],"ca":[],"cr":[[0,1]]},{"n":21,"p":[0,0],"a":"St","c":0,"e":3,"m":0,"ev":["Returned safely to burrow (Quota Met)!","Survived the entire winter!"],"ca":[],"cr":[]}]}]};
+initMinimap();
+initViewport();
+gotoDay(0, 0);
+
+// ---- HELPERS ----
+function getDay(di) { return RAW.days[di]; }
+function getStep(di, si) {
+  const day = getDay(di);
+  return si < day.st.length ? day.st[si] : day.st[day.st.length - 1];
+}
+
+function computeCacheStateAt(di, si) {
+  // Rebuild from scratch by replaying diffs up to (di, si)
+  let caches = {};
+  for (let d = 0; d <= di; d++) {
+    const day = getDay(d);
+    const maxS = (d < di) ? day.st.length : (si + 1);
+    for (let s = 0; s < maxS; s++) {
+      const step = day.st[s];
+      for (const c of step.ca) caches[c[0]+','+c[1]] = true;
+      for (const c of step.cr) delete caches[c[0]+','+c[1]];
+    }
+  }
+  return caches;
+}
+
+function collectDayTrail(di, upToStep) {
+  const day = getDay(di);
+  const trail = [[0,0]];
+  for (let s = 0; s <= upToStep && s < day.st.length; s++) {
+    trail.push(day.st[s].p);
+  }
+  return trail;
+}
+
+// ---- MINIMAP ----
+function initMinimap() {
+  const container = document.getElementById('day-minimap');
+  container.innerHTML = '';
+  const totalDays = RAW.days.length || 1;
+  RAW.days.forEach((d, i) => {
+    const el = document.createElement('div');
+    el.style.cssText = `width:${100/totalDays}%;height:100%;border-radius:2px;cursor:pointer;`;
+    el.style.background = d.s === 's' ? '#fbbf24' : '#60a5fa';
+    el.style.opacity = '0.5';
+    el.id = `mm-${i}`;
+    el.title = `${d.s==='s'?'Summer':'Winter'} Day ${d.d}`;
+    el.onclick = () => { gotoDay(i, 0); };
+    container.appendChild(el);
+  });
+}
+
+function updateMinimap(di) {
+  for (let i = 0; i < RAW.days.length; i++) {
+    const el = document.getElementById(`mm-${i}`);
+    if (!el) continue;
+    if (i === di) {
+      el.style.opacity = '1';
+      el.style.outline = '2px solid var(--foreground)';
+    } else {
+      el.style.opacity = '0.45';
+      el.style.outline = 'none';
+    }
+  }
+}
+
+// ---- VIEWPORT & GRID DRAWING ----
+function initViewport() {
+  let minX = 0, maxX = 0, minY = 0, maxY = 0;
+  for (const day of RAW.days) {
+    for (const st of day.st) {
+      const [px, py] = st.p;
+      if (px < minX) minX = px;
+      if (px > maxX) maxX = px;
+      if (py < minY) minY = py;
+      if (py > maxY) maxY = py;
+      for (const [cx, cy] of st.ca) {
+        if (cx < minX) minX = cx;
+        if (cx > maxX) maxX = cx;
+        if (cy < minY) minY = cy;
+        if (cy > maxY) maxY = cy;
+      }
+    }
+  }
+
+  // Add 1 cell of padding around the full trajectory bounding box
+  MIN_X = minX - 1;
+  MAX_X = maxX + 1;
+  MIN_Y = minY - 1;
+  MAX_Y = maxY + 1;
+  GRID_COLS = MAX_X - MIN_X + 1;
+  GRID_ROWS = MAX_Y - MIN_Y + 1;
+
+  // Pick a crisp cell size that fits comfortably in the viewer
+  CELL = Math.max(12, Math.min(26, Math.floor(Math.min(560 / GRID_COLS, 440 / GRID_ROWS))));
+
+  const canvas = document.getElementById('grid');
+  canvas.width = GRID_COLS * CELL;
+  canvas.height = GRID_ROWS * CELL;
+
+  const cfg = RAW.config;
+  const sub = document.getElementById('sim-subtitle');
+  if (sub && cfg) {
+    sub.textContent = `${RAW.days.length}-day trajectory replay`;
+  }
+  if (cfg) {
+    document.getElementById('cfg-days').textContent = `${cfg.summer_days} / ${cfg.winter_days}`;
+    document.getElementById('cfg-moves').textContent = cfg.move_budget;
+    document.getElementById('cfg-quota').textContent = `${cfg.daily_winter_quota} / day`;
+    const pFind = cfg.p_find_summer != null ? `${(cfg.p_find_summer * 100).toFixed(0)}%` : '—';
+    document.getElementById('cfg-pfind').textContent = pFind;
+    document.getElementById('cfg-seed').textContent = cfg.seed;
+    const statusEl = document.getElementById('cfg-status');
+    const ok = cfg.final_status === 'survived_winter';
+    statusEl.textContent = cfg.final_status.replace(/_/g, ' ');
+    statusEl.className = `px-3 py-1.5 font-semibold ${ok ? 'text-emerald-500' : 'text-red-500'}`;
+  }
+}
+
+function worldToCanvas(x, y) {
+  return [(x - MIN_X) * CELL, (MAX_Y - y) * CELL];
+}
+
+function drawGrid(di, si) {
+  const canvas = document.getElementById('grid');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+
+  const style = getComputedStyle(document.documentElement);
+  const isLight = document.documentElement.classList.contains('light');
+  const bgColor = isLight ? '#f8fafc' : '#1a1f2e';
+  const gridColor = isLight ? 'rgba(0,0,0,0.07)' : 'rgba(255,255,255,0.06)';
+  const textColor = isLight ? '#64748b' : '#475569';
+
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = bgColor;
+  ctx.fillRect(0, 0, W, H);
+
+  // Grid lines
+  ctx.strokeStyle = gridColor;
+  ctx.lineWidth = 1;
+  for (let col = 0; col <= GRID_COLS; col++) {
+    ctx.beginPath(); ctx.moveTo(col * CELL, 0); ctx.lineTo(col * CELL, H); ctx.stroke();
+  }
+  for (let row = 0; row <= GRID_ROWS; row++) {
+    ctx.beginPath(); ctx.moveTo(0, row * CELL); ctx.lineTo(W, row * CELL); ctx.stroke();
+  }
+
+  // Axis labels (dynamically span MIN_X..MAX_X and MIN_Y..MAX_Y)
+  ctx.fillStyle = textColor;
+  ctx.font = '9px monospace';
+  const xStep = GRID_COLS > 30 ? 5 : 2;
+  const yStep = GRID_ROWS > 30 ? 5 : 2;
+  ctx.textAlign = 'center';
+  for (let x = MIN_X; x <= MAX_X; x++) {
+    if (x % xStep !== 0) continue;
+    const [cx] = worldToCanvas(x, 0);
+    ctx.fillText(x, cx + CELL/2, H - 2);
+  }
+  ctx.textAlign = 'right';
+  for (let y = MIN_Y; y <= MAX_Y; y++) {
+    if (y % yStep !== 0) continue;
+    const [, cy] = worldToCanvas(0, y);
+    if (cy >= 0 && cy < H) ctx.fillText(y, CELL - 1, cy + CELL/2 + 3);
+  }
+
+  // Compute caches + trail + current step
+  const caches = computeCacheStateAt(di, si);
+  const trail = collectDayTrail(di, si);
+  const step = getStep(di, si);
+  const day = getDay(di);
+
+  // Determine nuts buried today (so far) and nuts retrieved today (so far)
+  const buriedToday = new Set();
+  const dugToday = new Set();
+  for (let s = 0; s <= si && s < day.st.length; s++) {
+    for (const c of day.st[s].ca) buriedToday.add(c[0]+','+c[1]);
+    for (const c of day.st[s].cr) dugToday.add(c[0]+','+c[1]);
+  }
+
+  // Trail
+  for (const [tx, ty] of trail) {
+    const [cx, cy] = worldToCanvas(tx, ty);
+    ctx.fillStyle = day.s === 's' ? 'rgba(254,215,0,0.15)' : 'rgba(96,165,250,0.15)';
+    ctx.fillRect(cx + 1, cy + 1, CELL - 2, CELL - 2);
+  }
+
+  // Trail path line
+  if (trail.length > 1) {
+    ctx.beginPath();
+    ctx.strokeStyle = day.s === 's' ? 'rgba(251,191,36,0.6)' : 'rgba(96,165,250,0.6)';
+    ctx.lineWidth = 2;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    const [sx0, sy0] = worldToCanvas(trail[0][0], trail[0][1]);
+    ctx.moveTo(sx0 + CELL/2, sy0 + CELL/2);
+    for (let i = 1; i < trail.length; i++) {
+      const [tx, ty] = worldToCanvas(trail[i][0], trail[i][1]);
+      ctx.lineTo(tx + CELL/2, ty + CELL/2);
+    }
+    ctx.stroke();
+  }
+
+  // Caches
+  for (const key of Object.keys(caches)) {
+    const [kx, ky] = key.split(',').map(Number);
+    const [cx, cy] = worldToCanvas(kx, ky);
+    if (buriedToday.has(key)) {
+      ctx.fillStyle = '#34d399';
+    } else {
+      ctx.fillStyle = '#a78bfa';
+    }
+    const pad = 3;
+    ctx.beginPath();
+    ctx.roundRect(cx+pad, cy+pad, CELL-pad*2, CELL-pad*2, 3);
+    ctx.fill();
+    // Nut symbol
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.font = `${CELL-8}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.fillText('●', cx+CELL/2, cy+CELL-5);
+  }
+
+  // Highlight any nuts retrieved today (already removed from caches)
+  for (const key of dugToday) {
+    const [kx, ky] = key.split(',').map(Number);
+    const [cx, cy] = worldToCanvas(kx, ky);
+    const pad = 3;
+    ctx.fillStyle = '#fb923c';
+    ctx.beginPath();
+    ctx.roundRect(cx+pad, cy+pad, CELL-pad*2, CELL-pad*2, 3);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    ctx.font = `${CELL-8}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.fillText('○', cx+CELL/2, cy+CELL-5);
+  }
+
+  // Burrow
+  const [hx, hy] = worldToCanvas(0, 0);
+  ctx.fillStyle = '#ef4444';
+  ctx.beginPath();
+  ctx.roundRect(hx+2, hy+2, CELL-4, CELL-4, 4);
+  ctx.fill();
+  ctx.fillStyle = 'white';
+  ctx.font = `bold ${CELL-6}px sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.fillText('⌂', hx+CELL/2, hy+CELL-4);
+
+  // Squirrel
+  const [sqx, sqy] = worldToCanvas(step.p[0], step.p[1]);
+  const r = CELL/2 - 1;
+  ctx.beginPath();
+  ctx.arc(sqx + CELL/2, sqy + CELL/2, r, 0, Math.PI*2);
+  ctx.fillStyle = '#facc15';
+  ctx.fill();
+  ctx.strokeStyle = '#d97706';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.fillStyle = '#78350f';
+  ctx.font = `${CELL-6}px sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.fillText(step.c ? '🌰' : '🐿', sqx+CELL/2, sqy+CELL-3);
+}
+
+// ---- UI STATE ----
+function updateUI(di, si) {
+  const day = getDay(di);
+  const step = getStep(di, si);
+  const isWinter = day.s === 'w';
+  const cfg = RAW.config;
+
+  // Season badge
+  const badge = document.getElementById('season-badge');
+  badge.textContent = isWinter ? '❄️ Winter' : '☀️ Summer';
+  badge.className = `text-xs font-bold px-3 py-1 rounded-full border ${
+    isWinter ? 'bg-blue-500/10 text-blue-500 border-blue-500/30' : 'bg-amber-500/10 text-amber-500 border-amber-500/30'
+  }`;
+
+  // Day label & slider
+  document.getElementById('day-label').textContent = `${isWinter?'Winter':'Summer'} Day ${day.d} of ${isWinter?cfg.winter_days:cfg.summer_days}`;
+  document.getElementById('day-slider').value = di;
+  document.getElementById('day-slider').max = RAW.days.length - 1;
+
+  // Step label & slider
+  document.getElementById('step-label').textContent = `${si+1} / ${day.st.length}`;
+  document.getElementById('step-slider').max = day.st.length - 1;
+  document.getElementById('step-slider').value = si;
+
+  // Stats
+  document.getElementById('stat-pos').textContent = `(${step.p[0]}, ${step.p[1]})`;
+  const actionColors = {N:'text-blue-400',S:'text-blue-400',E:'text-green-400',W:'text-green-400',St:'text-gray-400'};
+  const aLetter = step.a[0].toUpperCase();
+  const actionFull = {N:'North',S:'South',E:'East',W:'West',St:'Stay'}[step.a] || step.a;
+  const statAction = document.getElementById('stat-action');
+  statAction.textContent = actionFull;
+  statAction.className = `font-semibold ${actionColors[step.a] || 'text-blue-400'}`;
+  document.getElementById('stat-moves').textContent = step.m;
+  const dist = Math.abs(step.p[0]) + Math.abs(step.p[1]);
+  document.getElementById('stat-dist').textContent = dist;
+  const margin = step.m - dist;
+  const marginEl = document.getElementById('stat-margin');
+  marginEl.textContent = margin;
+  marginEl.className = `font-semibold ${margin <= 2 ? 'text-red-500' : margin <= 5 ? 'text-amber-500' : 'text-emerald-500'}`;
+  document.getElementById('stat-carry').textContent = step.c ? '🌰 Yes' : 'No';
+  document.getElementById('stat-eaten').textContent = step.e;
+  document.getElementById('stat-quota').textContent = `${step.e} / ${cfg.daily_winter_quota}`;
+
+  // Cache count
+  const caches = computeCacheStateAt(di, si);
+  document.getElementById('stat-caches').textContent = Object.keys(caches).length;
+
+  // Totals
+  let totalBuried = 0, totalRet = 0;
+  for (let d = 0; d < di; d++) {
+    if (RAW.days[d].s === 's') totalBuried += RAW.days[d].nc - (d > 0 && RAW.days[d-1].s==='s' ? RAW.days[d-1].nc : 0);
+  }
+  document.getElementById('stat-total-buried').textContent = cfg.total_summer_buried;
+  document.getElementById('stat-total-ret').textContent = cfg.total_winter_retrieved;
+
+  // Event log
+  updateEventLog(di, si);
+
+  // Minimap
+  updateMinimap(di);
+
+  // Nuts-in-ground chart
+  drawNutChart(di);
+}
+
+function drawNutChart(activeDi) {
+  const canvas = document.getElementById('nut-chart');
+  if (!canvas || !RAW || !RAW.days.length) return;
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = canvas.clientWidth || 260;
+  const cssH = 115;
+  if (canvas.width !== Math.round(cssW * dpr) || canvas.height !== Math.round(cssH * dpr)) {
+    canvas.width = Math.round(cssW * dpr);
+    canvas.height = Math.round(cssH * dpr);
+  }
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  const isLight = document.documentElement.classList.contains('light');
+  const gridColor = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)';
+  const textColor = isLight ? '#64748b' : '#94a3b8';
+
+  const padL = 34, padR = 12, padT = 12, padB = 22;
+  const plotW = Math.max(10, cssW - padL - padR);
+  const plotH = Math.max(10, cssH - padT - padB);
+
+  const days = RAW.days;
+  const n = days.length;
+  const counts = days.map(d => d.nc);
+  const maxVal = Math.max(1, ...counts);
+  const yMax = Math.ceil(maxVal / 10) * 10 || 10;
+
+  const meta = document.getElementById('nut-chart-meta');
+  if (meta) {
+    const cur = counts[activeDi] ?? 0;
+    meta.textContent = `Day ${activeDi + 1}: ${cur} nuts  •  Peak: ${maxVal}`;
+  }
+
+  ctx.clearRect(0, 0, cssW, cssH);
+
+  const xOf = i => padL + (n > 1 ? (i / (n - 1)) * plotW : plotW / 2);
+  const yOf = v => padT + plotH - (v / yMax) * plotH;
+
+  // Season background tint (Summer vs Winter)
+  const firstWinter = days.findIndex(d => d.s === 'w');
+  if (firstWinter > 0) {
+    const splitX = (xOf(firstWinter - 1) + xOf(firstWinter)) / 2;
+    ctx.fillStyle = 'rgba(251,191,36,0.06)';
+    ctx.fillRect(padL, padT, splitX - padL, plotH);
+    ctx.fillStyle = 'rgba(96,165,250,0.06)';
+    ctx.fillRect(splitX, padT, padL + plotW - splitX, plotH);
+    ctx.strokeStyle = isLight ? 'rgba(0,0,0,0.18)' : 'rgba(255,255,255,0.18)';
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.moveTo(splitX, padT); ctx.lineTo(splitX, padT + plotH); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // Horizontal gridlines & Y labels
+  ctx.strokeStyle = gridColor;
+  ctx.fillStyle = textColor;
+  ctx.font = '10px monospace';
+  ctx.lineWidth = 1;
+  ctx.textAlign = 'right';
+  const ticks = 4;
+  for (let t = 0; t <= ticks; t++) {
+    const v = Math.round((yMax / ticks) * t);
+    const y = yOf(v);
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + plotW, y); ctx.stroke();
+    ctx.fillText(v, padL - 6, y + 3);
+  }
+
+  // X-axis labels
+  ctx.textAlign = 'center';
+  const stepX = cssW < 340 ? (n > 35 ? 15 : 10) : (n > 40 ? 10 : 5);
+  for (let i = 0; i < n; i++) {
+    if (i === 0 || (i + 1) % stepX === 0 || i === n - 1) {
+      const d = days[i];
+      ctx.fillText(`${d.s.toUpperCase()}${d.d}`, xOf(i), cssH - 6);
+    }
+  }
+
+  // Area fill under curve
+  ctx.beginPath();
+  ctx.moveTo(xOf(0), padT + plotH);
+  for (let i = 0; i < n; i++) ctx.lineTo(xOf(i), yOf(counts[i]));
+  ctx.lineTo(xOf(n - 1), padT + plotH);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(167,139,250,0.16)';
+  ctx.fill();
+
+  // Line segments (amber in Summer, blue in Winter)
+  ctx.lineWidth = 2;
+  ctx.lineJoin = 'round';
+  for (let i = 1; i < n; i++) {
+    ctx.beginPath();
+    ctx.strokeStyle = days[i].s === 's' ? '#fbbf24' : '#60a5fa';
+    ctx.moveTo(xOf(i - 1), yOf(counts[i - 1]));
+    ctx.lineTo(xOf(i), yOf(counts[i]));
+    ctx.stroke();
+  }
+
+  // Current day vertical indicator + dot
+  const ax = xOf(activeDi);
+  const ay = yOf(counts[activeDi]);
+  ctx.strokeStyle = isLight ? 'rgba(15,23,42,0.35)' : 'rgba(248,250,252,0.4)';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(ax, padT); ctx.lineTo(ax, padT + plotH); ctx.stroke();
+
+  ctx.beginPath();
+  ctx.arc(ax, ay, 4.5, 0, Math.PI * 2);
+  ctx.fillStyle = days[activeDi].s === 's' ? '#fbbf24' : '#60a5fa';
+  ctx.fill();
+  ctx.strokeStyle = isLight ? '#0f172a' : '#ffffff';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+}
+
+function createEventEl(stepIdx, ev, animate) {
+  let icon = '•', color = 'text-[var(--foreground)]';
+  if (ev.includes('Starved') || ev.includes('Stranded')) { icon = '💀'; color = 'text-red-500 font-semibold'; }
+  else if (ev.includes('Survived')) { icon = '🏆'; color = 'text-emerald-400 font-semibold'; }
+  else if (ev.includes('buried') || ev.includes('Buried')) { icon = '⬇'; color = 'text-emerald-500'; }
+  else if (ev.includes('Found')) { icon = '🌰'; color = 'text-amber-500'; }
+  else if (ev.includes('Dug')) { icon = '⬆'; color = 'text-orange-400'; }
+  else if (ev.includes('Returned')) { icon = '🏠'; color = 'text-blue-400'; }
+  const div = document.createElement('div');
+  div.className = `${animate ? 'event-entry ' : ''}flex gap-1 items-start py-0.5`;
+  div.innerHTML = `<span class="shrink-0 w-5">${icon}</span><span class="${color}"><span class="text-[var(--muted-foreground)]">S${stepIdx+1}:</span> ${ev}</span>`;
+  return div;
+}
+
+function updateEventLog(di, si) {
+  const day = getDay(di);
+  const log = document.getElementById('step-log');
+  const count = document.getElementById('event-count');
+
+  if (di === lastLogDay && si === lastLogStep) return;
+
+  if (di === lastLogDay && si > lastLogStep) {
+    // Stepping forward within the same day: only append newly occurred events
+    let appended = false;
+    for (let s = lastLogStep + 1; s <= si && s < day.st.length; s++) {
+      for (const ev of day.st[s].ev) {
+        if (log.dataset.empty === '1') {
+          log.innerHTML = '';
+          delete log.dataset.empty;
+        }
+        log.appendChild(createEventEl(s, ev, true));
+        appended = true;
+      }
+    }
+    if (appended) log.scrollTop = log.scrollHeight;
+  } else {
+    // New day or scrubbed backwards: clear and rebuild up to si without flashing
+    log.innerHTML = '';
+    let n = 0;
+    for (let s = 0; s <= si && s < day.st.length; s++) {
+      for (const ev of day.st[s].ev) {
+        log.appendChild(createEventEl(s, ev, false));
+        n++;
+      }
+    }
+    if (n === 0) {
+      log.innerHTML = '<span class="text-[var(--muted-foreground)]">No events yet…</span>';
+      log.dataset.empty = '1';
+    } else {
+      delete log.dataset.empty;
+      log.scrollTop = log.scrollHeight;
+    }
+  }
+
+  lastLogDay = di;
+  lastLogStep = si;
+  const total = log.dataset.empty === '1' ? 0 : log.children.length;
+  count.textContent = `${total} event${total!==1?'s':''}`;
+}
+
+// ---- NAVIGATION ----
+function gotoDay(di, si) {
+  currentDayIdx = Math.max(0, Math.min(RAW.days.length - 1, di));
+  const day = getDay(currentDayIdx);
+  currentStepIdx = Math.max(0, Math.min(day.st.length - 1, si));
+  drawGrid(currentDayIdx, currentStepIdx);
+  updateUI(currentDayIdx, currentStepIdx);
+}
+
+function nextStep() {
+  const day = getDay(currentDayIdx);
+  if (currentStepIdx < day.st.length - 1) {
+    gotoDay(currentDayIdx, currentStepIdx + 1);
+  } else if (currentDayIdx < RAW.days.length - 1) {
+    gotoDay(currentDayIdx + 1, 0);
+  } else {
+    stopPlay();
+  }
+}
+
+function prevStep() {
+  if (currentStepIdx > 0) {
+    gotoDay(currentDayIdx, currentStepIdx - 1);
+  } else if (currentDayIdx > 0) {
+    const prevDay = getDay(currentDayIdx - 1);
+    gotoDay(currentDayIdx - 1, prevDay.st.length - 1);
+  }
+}
+
+function togglePlay() {
+  if (playing) stopPlay(); else startPlay();
+}
+
+function startPlay() {
+  playing = true;
+  document.getElementById('play-btn').textContent = '⏸ Pause';
+  const speed = parseInt(document.getElementById('speed-slider').value);
+  const delay = Math.round(600 / speed);
+  playInterval = setInterval(nextStep, delay);
+}
+
+function stopPlay() {
+  playing = false;
+  document.getElementById('play-btn').textContent = '▶ Play';
+  clearInterval(playInterval);
+}
+
+// ---- SLIDER EVENTS ----
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('day-slider').addEventListener('input', e => {
+    stopPlay();
+    gotoDay(parseInt(e.target.value), 0);
+  });
+  document.getElementById('step-slider').addEventListener('input', e => {
+    stopPlay();
+    gotoDay(currentDayIdx, parseInt(e.target.value));
+  });
+  document.getElementById('speed-slider').addEventListener('input', e => {
+    document.getElementById('speed-label').textContent = e.target.value + '×';
+    if (playing) { stopPlay(); startPlay(); }
+  });
+  document.getElementById('nut-chart').addEventListener('click', e => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const padL = 34, padR = 12;
+    const plotW = Math.max(10, rect.width - padL - padR);
+    const frac = Math.max(0, Math.min(1, (e.clientX - rect.left - padL) / plotW));
+    const di = Math.round(frac * (RAW.days.length - 1));
+    stopPlay();
+    gotoDay(di, 0);
+  });
+});
+
+window.addEventListener('themechange', () => {
+  drawGrid(currentDayIdx, currentStepIdx);
+  drawNutChart(currentDayIdx);
+});
+
+window.addEventListener('resize', () => {
+  drawNutChart(currentDayIdx);
+});
+
+// keyboard nav
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight') nextStep();
+  else if (e.key === 'ArrowLeft') prevStep();
+  else if (e.key === ' ') { e.preventDefault(); togglePlay(); }
+});
+</script>
+</body>
+</html>
